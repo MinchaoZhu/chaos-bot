@@ -1,0 +1,142 @@
+:root {
+  --bg: #f4f6fb;
+  --panel: #ffffff;
+  --ink: #111827;
+  --muted: #6b7280;
+  --line: #dbe3f4;
+  --accent: #2563eb;
+  --soft: #dbeafe;
+}
+
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  color: var(--ink);
+  font-family: "IBM Plex Sans", "Noto Sans SC", sans-serif;
+  background: radial-gradient(circle at 20% -10%, #e0ecff 0%, #f7f9ff 45%, #eef3ff 100%);
+}
+
+.app {
+  min-height: 100vh;
+  display: grid;
+  grid-template-columns: 280px 1fr;
+}
+
+.sidebar {
+  border-right: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.8);
+  backdrop-filter: blur(8px);
+  padding: 16px;
+}
+
+.sidebar-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.sidebar-head h1 {
+  margin: 0;
+  font-size: 20px;
+  letter-spacing: 0.3px;
+}
+
+#newSessionBtn {
+  border: 1px solid var(--accent);
+  background: #fff;
+  color: var(--accent);
+  border-radius: 8px;
+  padding: 6px 10px;
+  cursor: pointer;
+}
+
+#sessionList {
+  list-style: none;
+  padding: 0;
+  margin: 14px 0 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+#sessionList li {
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--panel);
+  padding: 10px;
+  cursor: pointer;
+}
+
+#sessionList li.active {
+  border-color: var(--accent);
+  background: var(--soft);
+}
+
+.chat-panel {
+  display: grid;
+  grid-template-rows: 1fr auto;
+  padding: 20px;
+  gap: 12px;
+}
+
+.messages {
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.9);
+  padding: 16px;
+  overflow: auto;
+}
+
+.message {
+  max-width: min(800px, 95%);
+  padding: 10px 12px;
+  border-radius: 10px;
+  margin-bottom: 10px;
+  line-height: 1.45;
+  white-space: pre-wrap;
+}
+
+.message.user {
+  background: #eff6ff;
+  border: 1px solid #bfdbfe;
+  margin-left: auto;
+}
+
+.message.assistant {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+}
+
+.message.tool {
+  font-family: "IBM Plex Mono", monospace;
+  background: #fff7ed;
+  border: 1px solid #fdba74;
+}
+
+.composer {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 10px;
+}
+
+.composer input {
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 10px 12px;
+  font-size: 14px;
+}
+
+.composer button {
+  border: 0;
+  border-radius: 10px;
+  padding: 10px 14px;
+  color: #fff;
+  background: var(--accent);
+  cursor: pointer;
+}
+
+@media (max-width: 900px) {
+  .app { grid-template-columns: 1fr; }
+  .sidebar { border-right: 0; border-bottom: 1px solid var(--line); }
+}

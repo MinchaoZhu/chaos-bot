@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>chaos-bot</title>
+  <link rel="stylesheet" href="/style.css" />
+</head>
+<body>
+  <div class="app">
+    <aside class="sidebar">
+      <div class="sidebar-head">
+        <h1>chaos-bot</h1>
+        <button id="newSessionBtn">新建会话</button>
+      </div>
+      <ul id="sessionList"></ul>
+    </aside>
+
+    <main class="chat-panel">
+      <div id="messages" class="messages"></div>
+      <form id="chatForm" class="composer">
+        <input id="messageInput" placeholder="输入消息..." autocomplete="off" />
+        <button type="submit">发送</button>
+      </form>
+    </main>
+  </div>
+
+  <script src="/app.js" defer></script>
+</body>
+</html>

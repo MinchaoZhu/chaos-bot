@@ -1,1 +1,13 @@
 .projects
+/target
+**/*.rs.bk
+.env
+.DS_Store
+node_modules
+frontend/.cache
+
+# Runtime-generated directories and files (anchored to repo root)
+/MEMORY.md
+/memory/
+/data/
+/personality/
