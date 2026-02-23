@@ -1,4 +1,4 @@
-use crate::memory::MemoryStore;
+use crate::memory::MemoryBackend;
 use crate::types::{ToolExecution, ToolResult, ToolSpec};
 use anyhow::{anyhow, Context, Result};
 use async_trait::async_trait;
@@ -14,7 +14,13 @@ use walkdir::WalkDir;
 #[derive(Clone)]
 pub struct ToolContext {
     pub root_dir: PathBuf,
-    pub memory: MemoryStore,
+    pub memory: Arc<dyn MemoryBackend>,
+}
+
+impl ToolContext {
+    pub fn new(root_dir: PathBuf, memory: Arc<dyn MemoryBackend>) -> Self {
+        Self { root_dir, memory }
+    }
 }
 
 #[async_trait]
@@ -101,7 +107,7 @@ impl ToolRegistry {
     }
 }
 
-fn ensure_within_root(root_dir: &Path, path: &Path) -> Result<()> {
+pub fn ensure_within_root(root_dir: &Path, path: &Path) -> Result<()> {
     let root = std::fs::canonicalize(root_dir)
         .with_context(|| format!("cannot canonicalize root: {}", root_dir.display()))?;
     let candidate = std::fs::canonicalize(path)
@@ -162,7 +168,7 @@ fn resolve_write_path_unrestricted(root_dir: &Path, input_path: &str) -> Result<
     Ok(path)
 }
 
-fn slice_lines(content: &str, start_line: Option<usize>, end_line: Option<usize>) -> String {
+pub fn slice_lines(content: &str, start_line: Option<usize>, end_line: Option<usize>) -> String {
     let lines: Vec<&str> = content.lines().collect();
     match (start_line, end_line) {
         (Some(start), Some(end)) => {

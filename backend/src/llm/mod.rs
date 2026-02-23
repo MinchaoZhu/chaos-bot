@@ -12,7 +12,7 @@ use std::sync::Arc;
 
 pub type LlmStream = Pin<Box<dyn Stream<Item = Result<LlmStreamEvent>> + Send>>;
 
-type ByteStream = Pin<Box<dyn Stream<Item = std::result::Result<bytes::Bytes, reqwest::Error>> + Send>>;
+pub type ByteStream = Pin<Box<dyn Stream<Item = std::result::Result<bytes::Bytes, reqwest::Error>> + Send>>;
 
 #[derive(Clone, Debug)]
 pub struct LlmRequest {
@@ -57,7 +57,112 @@ pub fn build_provider(config: &AppConfig) -> Result<Arc<dyn LlmProvider>> {
         }
         "anthropic" => Ok(Arc::new(AnthropicProvider)),
         "gemini" => Ok(Arc::new(GeminiProvider)),
+        "mock" => Ok(Arc::new(MockProvider)),
         other => Err(anyhow!("unsupported provider: {other}")),
+    }
+}
+
+/// Built-in mock provider for testing without API keys.
+/// Activated via `CHAOS_PROVIDER=mock`. Returns canned responses and
+/// optionally simulates tool calls when the input contains "use_tool:".
+pub struct MockProvider;
+
+#[async_trait]
+impl LlmProvider for MockProvider {
+    fn name(&self) -> &'static str {
+        "mock"
+    }
+
+    async fn chat(&self, request: LlmRequest) -> Result<LlmResponse> {
+        let user_content = request
+            .messages
+            .iter()
+            .rev()
+            .find(|m| m.role == Role::User)
+            .map(|m| m.content.clone())
+            .unwrap_or_default();
+
+        if let Some(rest) = user_content.strip_prefix("use_tool:") {
+            let tool_name = rest.trim().split_whitespace().next().unwrap_or("read");
+            return Ok(LlmResponse {
+                message: Message::assistant(""),
+                tool_calls: vec![ToolCall {
+                    id: "mock_tc_1".to_string(),
+                    name: tool_name.to_string(),
+                    arguments: json!({}),
+                }],
+                usage: Some(Usage { prompt_tokens: 10, completion_tokens: 5, total_tokens: 15 }),
+                finish_reason: Some("tool_calls".to_string()),
+            });
+        }
+
+        Ok(LlmResponse {
+            message: Message::assistant(format!("Mock response to: {}", user_content)),
+            tool_calls: vec![],
+            usage: Some(Usage { prompt_tokens: 10, completion_tokens: 20, total_tokens: 30 }),
+            finish_reason: Some("stop".to_string()),
+        })
+    }
+
+    async fn chat_stream(&self, request: LlmRequest) -> Result<LlmStream> {
+        let user_content = request
+            .messages
+            .iter()
+            .rev()
+            .find(|m| m.role == Role::User)
+            .map(|m| m.content.clone())
+            .unwrap_or_default();
+
+        if let Some(rest) = user_content.strip_prefix("use_tool:") {
+            let tool_name = rest.trim().split_whitespace().next().unwrap_or("read");
+            return Ok(Box::pin(stream::iter(vec![
+                Ok(LlmStreamEvent {
+                    delta: String::new(),
+                    tool_call: Some(ToolCall {
+                        id: "mock_tc_1".to_string(),
+                        name: tool_name.to_string(),
+                        arguments: json!({}),
+                    }),
+                    done: false,
+                    usage: None,
+                }),
+                Ok(LlmStreamEvent {
+                    delta: String::new(),
+                    tool_call: None,
+                    done: true,
+                    usage: Some(Usage { prompt_tokens: 10, completion_tokens: 5, total_tokens: 15 }),
+                }),
+            ])));
+        }
+
+        let reply = format!("Mock response to: {}", user_content);
+        let chunks: Vec<String> = reply
+            .chars()
+            .collect::<Vec<_>>()
+            .chunks(10)
+            .map(|c| c.iter().collect())
+            .collect();
+
+        let mut events: Vec<Result<LlmStreamEvent>> = chunks
+            .into_iter()
+            .map(|chunk| {
+                Ok(LlmStreamEvent {
+                    delta: chunk,
+                    tool_call: None,
+                    done: false,
+                    usage: None,
+                })
+            })
+            .collect();
+
+        events.push(Ok(LlmStreamEvent {
+            delta: String::new(),
+            tool_call: None,
+            done: true,
+            usage: Some(Usage { prompt_tokens: 10, completion_tokens: 20, total_tokens: 30 }),
+        }));
+
+        Ok(Box::pin(stream::iter(events)))
     }
 }
 
@@ -67,16 +172,16 @@ pub struct OpenAiProvider {
     base_url: String,
 }
 
-struct OpenAiStreamState {
-    stream: ByteStream,
-    text_buffer: String,
-    pending: VecDeque<Result<LlmStreamEvent>>,
-    tool_ids: HashMap<u64, String>,
-    tool_names: HashMap<u64, String>,
-    tool_args: HashMap<u64, String>,
-    usage: Option<Usage>,
-    done: bool,
-    emitted_done: bool,
+pub struct OpenAiStreamState {
+    pub stream: ByteStream,
+    pub text_buffer: String,
+    pub pending: VecDeque<Result<LlmStreamEvent>>,
+    pub tool_ids: HashMap<u64, String>,
+    pub tool_names: HashMap<u64, String>,
+    pub tool_args: HashMap<u64, String>,
+    pub usage: Option<Usage>,
+    pub done: bool,
+    pub emitted_done: bool,
 }
 
 impl OpenAiProvider {
@@ -89,7 +194,7 @@ impl OpenAiProvider {
         }
     }
 
-    fn map_messages(messages: &[Message]) -> Vec<Value> {
+    pub fn map_messages(messages: &[Message]) -> Vec<Value> {
         messages
             .iter()
             .map(|message| match message.role {
@@ -105,7 +210,7 @@ impl OpenAiProvider {
             .collect()
     }
 
-    fn map_tools(tools: &[ToolSpec]) -> Vec<Value> {
+    pub fn map_tools(tools: &[ToolSpec]) -> Vec<Value> {
         tools
             .iter()
             .map(|tool| {
@@ -121,7 +226,7 @@ impl OpenAiProvider {
             .collect()
     }
 
-    fn parse_usage(data: &Value) -> Option<Usage> {
+    pub fn parse_usage(data: &Value) -> Option<Usage> {
         data.get("usage").and_then(|value| {
             Some(Usage {
                 prompt_tokens: value.get("prompt_tokens")?.as_u64()? as u32,
@@ -131,7 +236,7 @@ impl OpenAiProvider {
         })
     }
 
-    fn parse_tool_calls_from_message(message_data: &Value) -> Vec<ToolCall> {
+    pub fn parse_tool_calls_from_message(message_data: &Value) -> Vec<ToolCall> {
         message_data
             .get("tool_calls")
             .and_then(|value| value.as_array())
@@ -167,7 +272,7 @@ impl OpenAiProvider {
             .unwrap_or_default()
     }
 
-    fn drain_sse_payloads(buffer: &mut String) -> Vec<String> {
+    pub fn drain_sse_payloads(buffer: &mut String) -> Vec<String> {
         let mut payloads = Vec::new();
         while let Some(index) = buffer.find("\n\n") {
             let chunk = buffer[..index].to_string();
@@ -190,7 +295,7 @@ impl OpenAiProvider {
         payloads
     }
 
-    fn flush_tool_calls(state: &mut OpenAiStreamState) {
+    pub fn flush_tool_calls(state: &mut OpenAiStreamState) {
         let mut indexes = state.tool_args.keys().copied().collect::<Vec<_>>();
         indexes.sort_unstable();
 
@@ -220,7 +325,7 @@ impl OpenAiProvider {
         }
     }
 
-    fn process_stream_payload(state: &mut OpenAiStreamState, payload: &str) -> Result<()> {
+    pub fn process_stream_payload(state: &mut OpenAiStreamState, payload: &str) -> Result<()> {
         if payload.trim() == "[DONE]" {
             state.done = true;
             if !state.emitted_done {

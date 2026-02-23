@@ -1,10 +1,10 @@
 use axum::body::{to_bytes, Body};
 use axum::http::{Request, StatusCode};
-use chaos_bot_backend::agent::AgentLoop;
+use chaos_bot_backend::agent::{AgentConfig, AgentLoop};
 use chaos_bot_backend::api::{router, AppState};
 use chaos_bot_backend::llm::{LlmProvider, LlmRequest, LlmResponse, LlmStream};
-use chaos_bot_backend::memory::MemoryStore;
-use chaos_bot_backend::personality::PersonalityLoader;
+use chaos_bot_backend::memory::{MemoryBackend, MemoryStore};
+use chaos_bot_backend::personality::{PersonalityLoader, PersonalitySource};
 use chaos_bot_backend::sessions::SessionStore;
 use chaos_bot_backend::tools::ToolRegistry;
 use chaos_bot_backend::types::SessionState;
@@ -37,19 +37,22 @@ fn build_state() -> AppState {
 
     let memory_dir = temp.path().join("memory");
     let memory_file = temp.path().join("MEMORY.md");
-    let memory = MemoryStore::new(memory_dir, memory_file);
+    let memory: Arc<dyn MemoryBackend> = Arc::new(MemoryStore::new(memory_dir, memory_file));
+    let personality: Arc<dyn PersonalitySource> = Arc::new(PersonalityLoader::new(personality_dir));
 
     let agent = AgentLoop::new(
         Arc::new(MockProvider),
         Arc::new(ToolRegistry::new()),
-        PersonalityLoader::new(personality_dir),
+        personality,
         memory,
-        "mock-model".to_string(),
-        0.0,
-        128,
-        1,
-        1024,
-        temp.path().to_path_buf(),
+        AgentConfig {
+            model: "mock-model".to_string(),
+            temperature: 0.0,
+            max_tokens: 128,
+            max_iterations: 1,
+            token_budget: 1024,
+            working_dir: temp.path().to_path_buf(),
+        },
     );
 
     AppState {

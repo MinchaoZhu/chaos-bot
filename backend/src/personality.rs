@@ -1,4 +1,5 @@
 use anyhow::Result;
+use async_trait::async_trait;
 use std::path::{Path, PathBuf};
 use tokio::fs;
 
@@ -7,6 +8,11 @@ const PERSONALITY_ORDER: [&str; 4] = ["SOUL.md", "IDENTITY.md", "USER.md", "AGEN
 #[derive(Clone, Debug)]
 pub struct PersonalityLoader {
     dir: PathBuf,
+}
+
+#[async_trait]
+pub trait PersonalitySource: Send + Sync {
+    async fn system_prompt(&self) -> Result<String>;
 }
 
 impl PersonalityLoader {
@@ -37,5 +43,12 @@ impl PersonalityLoader {
             out.push_str(&format!("## {}\n{}\n\n", name, content.trim()));
         }
         Ok(out)
+    }
+}
+
+#[async_trait]
+impl PersonalitySource for PersonalityLoader {
+    async fn system_prompt(&self) -> Result<String> {
+        PersonalityLoader::system_prompt(self).await
     }
 }

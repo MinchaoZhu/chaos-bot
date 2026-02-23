@@ -1,7 +1,7 @@
-use chaos_bot_backend::agent::AgentLoop;
+use chaos_bot_backend::agent::{AgentConfig, AgentLoop};
 use chaos_bot_backend::llm::{LlmProvider, LlmRequest, LlmResponse, LlmStream, LlmStreamEvent};
-use chaos_bot_backend::memory::MemoryStore;
-use chaos_bot_backend::personality::PersonalityLoader;
+use chaos_bot_backend::memory::{MemoryBackend, MemoryStore};
+use chaos_bot_backend::personality::{PersonalityLoader, PersonalitySource};
 use chaos_bot_backend::tools::ToolRegistry;
 use chaos_bot_backend::types::{Role, SessionState};
 use futures::stream;
@@ -58,20 +58,24 @@ async fn agent_builds_single_system_message_with_memory_context() {
     let provider = CaptureProvider::default();
     let request_capture = provider.request.clone();
 
-    let memory = MemoryStore::new(memory_dir, memory_file);
-    memory.ensure_layout().await.expect("ensure memory");
+    let memory_store = MemoryStore::new(memory_dir, memory_file);
+    memory_store.ensure_layout().await.expect("ensure memory");
+    let memory: Arc<dyn MemoryBackend> = Arc::new(memory_store);
+    let personality: Arc<dyn PersonalitySource> = Arc::new(PersonalityLoader::new(personality_dir));
 
     let agent = AgentLoop::new(
         Arc::new(provider),
         Arc::new(ToolRegistry::new()),
-        PersonalityLoader::new(personality_dir),
+        personality,
         memory,
-        "mock-model".to_string(),
-        0.0,
-        128,
-        2,
-        4096,
-        temp.path().to_path_buf(),
+        AgentConfig {
+            model: "mock-model".to_string(),
+            temperature: 0.0,
+            max_tokens: 128,
+            max_iterations: 2,
+            token_budget: 4096,
+            working_dir: temp.path().to_path_buf(),
+        },
     );
 
     let mut session = SessionState::new("s1");

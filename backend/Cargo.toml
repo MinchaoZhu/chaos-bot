@@ -23,6 +23,8 @@ uuid = { version = "1", features = ["v4", "serde"] }
 walkdir = "2"
 
 [dev-dependencies]
+assert-json-diff = "2"
 pretty_assertions = "1"
+serial_test = "3"
 tempfile = "3"
 tower = "0.5"

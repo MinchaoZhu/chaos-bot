@@ -4,6 +4,7 @@ use chaos_bot_backend::memory::MemoryStore;
 use chaos_bot_backend::tools::{EditTool, Tool, ToolContext, WriteTool};
 use serde_json::json;
 use std::os::unix::fs::symlink;
+use std::sync::Arc;
 use tempfile::tempdir;
 
 #[tokio::test]
@@ -14,11 +15,11 @@ async fn write_tool_allows_symlink_escape_targets() {
     let link_path = root.path().join("link");
     symlink(outside.path(), &link_path).expect("create symlink");
 
-    let memory = MemoryStore::new(root.path().join("memory"), root.path().join("MEMORY.md"));
-    let context = ToolContext {
-        root_dir: root.path().to_path_buf(),
-        memory,
-    };
+    let memory = Arc::new(MemoryStore::new(
+        root.path().join("memory"),
+        root.path().join("MEMORY.md"),
+    ));
+    let context = ToolContext::new(root.path().to_path_buf(), memory);
 
     let write = WriteTool;
     let result = write
@@ -48,11 +49,11 @@ async fn edit_tool_allows_symlink_escape_targets() {
     let target = outside.path().join("edit.txt");
     std::fs::write(&target, "hello world").expect("seed file");
 
-    let memory = MemoryStore::new(root.path().join("memory"), root.path().join("MEMORY.md"));
-    let context = ToolContext {
-        root_dir: root.path().to_path_buf(),
-        memory,
-    };
+    let memory = Arc::new(MemoryStore::new(
+        root.path().join("memory"),
+        root.path().join("MEMORY.md"),
+    ));
+    let context = ToolContext::new(root.path().to_path_buf(), memory);
 
     let edit = EditTool;
     let result = edit

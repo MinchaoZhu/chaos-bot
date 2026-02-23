@@ -1,25 +1,45 @@
+use crate::config::AppConfig;
 use crate::llm::{LlmProvider, LlmRequest};
-use crate::memory::{MemoryHit, MemoryStore};
-use crate::personality::PersonalityLoader;
+use crate::memory::{MemoryBackend, MemoryHit};
+use crate::personality::PersonalitySource;
 use crate::tools::{ToolContext, ToolRegistry};
 use crate::types::{Message, SessionState, ToolCall, ToolResult, Usage};
 use anyhow::Result;
 use futures::StreamExt;
 use serde::Serialize;
+use std::path::PathBuf;
 use std::sync::Arc;
+
+#[derive(Clone, Debug)]
+pub struct AgentConfig {
+    pub model: String,
+    pub temperature: f32,
+    pub max_tokens: u32,
+    pub max_iterations: usize,
+    pub token_budget: u32,
+    pub working_dir: PathBuf,
+}
+
+impl From<&AppConfig> for AgentConfig {
+    fn from(value: &AppConfig) -> Self {
+        Self {
+            model: value.model.clone(),
+            temperature: value.temperature,
+            max_tokens: value.max_tokens,
+            max_iterations: value.max_iterations,
+            token_budget: value.token_budget,
+            working_dir: value.working_dir.clone(),
+        }
+    }
+}
 
 #[derive(Clone)]
 pub struct AgentLoop {
     provider: Arc<dyn LlmProvider>,
     tools: Arc<ToolRegistry>,
-    personality: PersonalityLoader,
-    memory: MemoryStore,
-    model: String,
-    temperature: f32,
-    max_tokens: u32,
-    max_iterations: usize,
-    token_budget: u32,
-    working_dir: std::path::PathBuf,
+    personality: Arc<dyn PersonalitySource>,
+    memory: Arc<dyn MemoryBackend>,
+    config: AgentConfig,
 }
 
 #[derive(Clone, Debug, Serialize)]
@@ -43,30 +63,19 @@ pub struct AgentRunOutput {
 }
 
 impl AgentLoop {
-    #[allow(clippy::too_many_arguments)]
     pub fn new(
         provider: Arc<dyn LlmProvider>,
         tools: Arc<ToolRegistry>,
-        personality: PersonalityLoader,
-        memory: MemoryStore,
-        model: String,
-        temperature: f32,
-        max_tokens: u32,
-        max_iterations: usize,
-        token_budget: u32,
-        working_dir: std::path::PathBuf,
+        personality: Arc<dyn PersonalitySource>,
+        memory: Arc<dyn MemoryBackend>,
+        config: AgentConfig,
     ) -> Self {
         Self {
             provider,
             tools,
             personality,
             memory,
-            model,
-            temperature,
-            max_tokens,
-            max_iterations,
-            token_budget,
-            working_dir,
+            config,
         }
     }
 
@@ -99,17 +108,17 @@ impl AgentLoop {
         let mut finish_reason = None;
         let mut tool_events = Vec::new();
 
-        for _ in 0..self.max_iterations {
-            Self::enforce_token_budget(&mut messages, self.token_budget);
+        for _ in 0..self.config.max_iterations {
+            Self::enforce_token_budget(&mut messages, self.config.token_budget);
 
             let mut stream = self
                 .provider
                 .chat_stream(LlmRequest {
-                    model: self.model.clone(),
+                    model: self.config.model.clone(),
                     messages: messages.clone(),
                     tools: self.tools.specs(),
-                    temperature: self.temperature,
-                    max_tokens: self.max_tokens,
+                    temperature: self.config.temperature,
+                    max_tokens: self.config.max_tokens,
                 })
                 .await?;
 
@@ -155,10 +164,7 @@ impl AgentLoop {
             }
 
             finish_reason = Some("tool_calls".to_string());
-            let tool_context = ToolContext {
-                root_dir: self.working_dir.clone(),
-                memory: self.memory.clone(),
-            };
+            let tool_context = ToolContext::new(self.config.working_dir.clone(), self.memory.clone());
 
             for call in tool_calls {
                 let result = match self
@@ -196,7 +202,7 @@ impl AgentLoop {
         })
     }
 
-    fn build_system_prompt(personality_prompt: &str, memory_context: &[MemoryHit]) -> String {
+    pub fn build_system_prompt(personality_prompt: &str, memory_context: &[MemoryHit]) -> String {
         let mut prompt = personality_prompt.trim().to_string();
         if !memory_context.is_empty() {
             let memory_block = memory_context
@@ -211,13 +217,13 @@ impl AgentLoop {
         prompt
     }
 
-    fn enforce_token_budget(messages: &mut Vec<Message>, token_budget: u32) {
+    pub fn enforce_token_budget(messages: &mut Vec<Message>, token_budget: u32) {
         while Self::estimate_tokens(messages) > token_budget && messages.len() > 2 {
             messages.remove(1);
         }
     }
 
-    fn estimate_tokens(messages: &[Message]) -> u32 {
+    pub fn estimate_tokens(messages: &[Message]) -> u32 {
         messages
             .iter()
             .map(|message| (message.content.len() / 4 + 8) as u32)

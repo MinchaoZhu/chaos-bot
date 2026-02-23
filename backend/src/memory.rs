@@ -1,4 +1,5 @@
 use anyhow::{anyhow, Result};
+use async_trait::async_trait;
 use chrono::Utc;
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
@@ -17,6 +18,21 @@ pub struct MemoryHit {
     pub path: String,
     pub line: usize,
     pub snippet: String,
+}
+
+#[async_trait]
+pub trait MemoryBackend: Send + Sync {
+    async fn search(&self, keyword: &str) -> Result<Vec<MemoryHit>>;
+    async fn append_daily_log(&self, summary: &str) -> Result<PathBuf>;
+    async fn get_file(
+        &self,
+        relative_path: &str,
+        start_line: Option<usize>,
+        end_line: Option<usize>,
+    ) -> Result<String>;
+    async fn read_curated(&self) -> Result<String>;
+    async fn write_curated(&self, content: &str) -> Result<()>;
+    async fn ensure_layout(&self) -> Result<()>;
 }
 
 impl MemoryStore {
@@ -146,5 +162,37 @@ impl MemoryStore {
             }
         }
         files
+    }
+}
+
+#[async_trait]
+impl MemoryBackend for MemoryStore {
+    async fn search(&self, keyword: &str) -> Result<Vec<MemoryHit>> {
+        MemoryStore::search(self, keyword).await
+    }
+
+    async fn append_daily_log(&self, summary: &str) -> Result<PathBuf> {
+        MemoryStore::append_daily_log(self, summary).await
+    }
+
+    async fn get_file(
+        &self,
+        relative_path: &str,
+        start_line: Option<usize>,
+        end_line: Option<usize>,
+    ) -> Result<String> {
+        MemoryStore::get_file(self, relative_path, start_line, end_line).await
+    }
+
+    async fn read_curated(&self) -> Result<String> {
+        MemoryStore::read_curated(self).await
+    }
+
+    async fn write_curated(&self, content: &str) -> Result<()> {
+        MemoryStore::write_curated(self, content).await
+    }
+
+    async fn ensure_layout(&self) -> Result<()> {
+        MemoryStore::ensure_layout(self).await
     }
 }
