@@ -5,7 +5,7 @@
 - Main Repository: /home/debian/projects/chaos-bot
 - Branch: feat/bot
 - Active Task: task-3
-- Last Updated: 2026-02-23T14:52:57+08:00
+- Last Updated: 2026-02-23T23:20:27+08:00
 
 ## Task Index
 - task-1: done
@@ -23,9 +23,10 @@
 
 ## PM File Map
 - `.pm/docs/project.md`: Project context (repo path, branch, last update).
-- `.pm/task-1.md`: Bootstrap scaffold execution history (completed).
-- `.pm/task-2.md`: Verification framework task plan and completion record.
-- `.pm/task-3.md`: Dependency injection refactor plan and completion record.
+- `.pm/bot/`: Project-scoped task directory for `bot`.
+- `.pm/bot/task-1.md`: Bootstrap scaffold execution history (completed).
+- `.pm/bot/task-2.md`: Verification framework task plan and completion record.
+- `.pm/bot/task-3.md`: Dependency injection refactor plan and completion record.
 - `AGENTS.md`: Shared runtime status, task index, and verification summary.
 - `CLAUDE.md`: Symlink to `AGENTS.md`.
 
