@@ -1,32 +1,46 @@
 :root {
-  --bg: #f4f6fb;
-  --panel: #ffffff;
-  --ink: #111827;
-  --muted: #6b7280;
-  --line: #dbe3f4;
-  --accent: #2563eb;
-  --soft: #dbeafe;
+  --bg-deep: #0f172a;
+  --bg-mid: #1e293b;
+  --bg-soft: #e2e8f0;
+  --panel: rgba(255, 255, 255, 0.88);
+  --panel-strong: rgba(255, 255, 255, 0.96);
+  --ink: #0f172a;
+  --muted: #475569;
+  --line: rgba(30, 41, 59, 0.14);
+  --accent: #0ea5e9;
+  --accent-2: #22d3ee;
+  --ok: #0f766e;
+  --warn: #b45309;
+  --err: #b91c1c;
 }
 
 * { box-sizing: border-box; }
+
 body {
   margin: 0;
   color: var(--ink);
-  font-family: "IBM Plex Sans", "Noto Sans SC", sans-serif;
-  background: radial-gradient(circle at 20% -10%, #e0ecff 0%, #f7f9ff 45%, #eef3ff 100%);
+  font-family: "Space Grotesk", "Noto Sans SC", sans-serif;
+  background:
+    radial-gradient(1200px 700px at 10% -20%, #38bdf8 0%, transparent 55%),
+    radial-gradient(900px 600px at 110% -10%, #67e8f9 0%, transparent 45%),
+    linear-gradient(155deg, var(--bg-deep) 0%, var(--bg-mid) 45%, #0b1220 100%);
 }
 
 .app {
   min-height: 100vh;
   display: grid;
-  grid-template-columns: 280px 1fr;
+  grid-template-columns: 300px 1fr;
 }
 
 .sidebar {
-  border-right: 1px solid var(--line);
-  background: rgba(255, 255, 255, 0.8);
-  backdrop-filter: blur(8px);
+  border-right: 1px solid rgba(255, 255, 255, 0.2);
+  background: rgba(15, 23, 42, 0.62);
+  backdrop-filter: blur(14px);
+  color: #e2e8f0;
   padding: 16px;
+  display: grid;
+  grid-template-rows: auto auto 1fr;
+  gap: 14px;
 }
 
 .sidebar-head {
@@ -38,58 +52,93 @@ body {
 
 .sidebar-head h1 {
   margin: 0;
-  font-size: 20px;
-  letter-spacing: 0.3px;
+  font-size: 21px;
+  letter-spacing: 0.5px;
 }
 
 #newSessionBtn {
-  border: 1px solid var(--accent);
-  background: #fff;
-  color: var(--accent);
-  border-radius: 8px;
-  padding: 6px 10px;
+  border: 1px solid rgba(34, 211, 238, 0.8);
+  background: rgba(14, 165, 233, 0.18);
+  color: #ecfeff;
+  border-radius: 10px;
+  padding: 7px 10px;
   cursor: pointer;
+}
+
+.main-tabs {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.main-tab {
+  border: 1px solid rgba(226, 232, 240, 0.2);
+  border-radius: 10px;
+  padding: 8px 10px;
+  color: #bae6fd;
+  background: rgba(15, 23, 42, 0.4);
+  cursor: pointer;
+}
+
+.main-tab.active {
+  border-color: rgba(34, 211, 238, 0.85);
+  background: linear-gradient(120deg, rgba(14, 165, 233, 0.38), rgba(34, 211, 238, 0.22));
+  color: #f0fdfa;
 }
 
 #sessionList {
   list-style: none;
   padding: 0;
-  margin: 14px 0 0;
+  margin: 0;
   display: flex;
   flex-direction: column;
   gap: 8px;
+  overflow: auto;
 }
 
 #sessionList li {
-  border: 1px solid var(--line);
+  border: 1px solid rgba(203, 213, 225, 0.25);
   border-radius: 10px;
-  background: var(--panel);
+  background: rgba(15, 23, 42, 0.35);
+  color: #e2e8f0;
   padding: 10px;
   cursor: pointer;
 }
 
 #sessionList li.active {
-  border-color: var(--accent);
-  background: var(--soft);
+  border-color: rgba(103, 232, 249, 0.9);
+  background: rgba(14, 165, 233, 0.25);
 }
 
-.chat-panel {
-  display: grid;
-  grid-template-rows: 1fr auto;
+.content {
   padding: 20px;
+}
+
+.panel {
+  display: none;
+  height: calc(100vh - 40px);
+}
+
+.panel.active {
+  display: grid;
+}
+
+#chatView {
+  grid-template-rows: 1fr auto;
   gap: 12px;
 }
 
 .messages {
   border: 1px solid var(--line);
-  border-radius: 12px;
-  background: rgba(255, 255, 255, 0.9);
+  border-radius: 14px;
+  background: var(--panel);
   padding: 16px;
   overflow: auto;
+  box-shadow: 0 18px 40px rgba(15, 23, 42, 0.2);
 }
 
 .message {
-  max-width: min(800px, 95%);
+  max-width: min(840px, 95%);
   padding: 10px 12px;
   border-radius: 10px;
   margin-bottom: 10px;
@@ -98,14 +147,14 @@ body {
 }
 
 .message.user {
-  background: #eff6ff;
-  border: 1px solid #bfdbfe;
+  background: #e0f2fe;
+  border: 1px solid #7dd3fc;
   margin-left: auto;
 }
 
 .message.assistant {
   background: #f8fafc;
-  border: 1px solid #e2e8f0;
+  border: 1px solid #cbd5e1;
 }
 
 .message.tool {
@@ -125,18 +174,161 @@ body {
   border-radius: 10px;
   padding: 10px 12px;
   font-size: 14px;
+  background: var(--panel-strong);
 }
 
 .composer button {
   border: 0;
   border-radius: 10px;
   padding: 10px 14px;
-  color: #fff;
-  background: var(--accent);
+  color: #f0fdfa;
+  background: linear-gradient(140deg, #0284c7, #06b6d4);
   cursor: pointer;
 }
 
-@media (max-width: 900px) {
+#configView {
+  grid-template-rows: auto auto auto 1fr auto;
+  gap: 10px;
+}
+
+.config-head h2 {
+  margin: 0;
+  font-size: 24px;
+  color: #ecfeff;
+  text-shadow: 0 4px 16px rgba(14, 165, 233, 0.45);
+}
+
+.config-head p {
+  margin: 4px 0 0;
+  color: #bae6fd;
+  font-size: 13px;
+}
+
+.config-tabs {
+  display: inline-flex;
+  border: 1px solid rgba(148, 163, 184, 0.3);
+  border-radius: 12px;
+  padding: 4px;
+  background: rgba(15, 23, 42, 0.35);
+}
+
+.config-tab {
+  border: 0;
+  border-radius: 8px;
+  padding: 8px 12px;
+  color: #cbd5e1;
+  background: transparent;
+  cursor: pointer;
+}
+
+.config-tab.active {
+  color: #ecfeff;
+  background: linear-gradient(140deg, rgba(2, 132, 199, 0.75), rgba(34, 211, 238, 0.55));
+}
+
+.config-status {
+  min-height: 20px;
+  font-size: 13px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  color: #e2e8f0;
+  background: rgba(15, 23, 42, 0.35);
+}
+
+.config-status.ok { border: 1px solid rgba(20, 184, 166, 0.5); color: #ccfbf1; }
+.config-status.warning { border: 1px solid rgba(245, 158, 11, 0.55); color: #fef3c7; }
+.config-status.error { border: 1px solid rgba(248, 113, 113, 0.55); color: #fee2e2; }
+
+.config-view {
+  display: none;
+  min-height: 0;
+}
+
+.config-view.active {
+  display: block;
+}
+
+#configRawInput {
+  width: 100%;
+  height: 100%;
+  min-height: 340px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: rgba(248, 250, 252, 0.98);
+  color: #0f172a;
+  padding: 14px;
+  font-family: "IBM Plex Mono", monospace;
+  line-height: 1.45;
+  resize: vertical;
+}
+
+.config-form {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(240px, 1fr));
+  gap: 10px;
+  padding: 14px;
+  border-radius: 12px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  max-height: 100%;
+  overflow: auto;
+}
+
+.config-form label {
+  display: grid;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.config-form input,
+.config-form select {
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  padding: 8px 10px;
+  font-size: 14px;
+  color: var(--ink);
+  background: #ffffff;
+}
+
+.config-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.config-actions button {
+  border: 0;
+  border-radius: 10px;
+  padding: 10px 14px;
+  cursor: pointer;
+  color: #0f172a;
+  font-weight: 600;
+}
+
+.config-actions .ghost {
+  color: #e2e8f0;
+  border: 1px solid rgba(148, 163, 184, 0.45);
+  background: rgba(15, 23, 42, 0.3);
+}
+
+.config-actions .primary {
+  color: #082f49;
+  background: linear-gradient(130deg, #7dd3fc, #67e8f9);
+}
+
+.config-actions .danger {
+  color: #450a0a;
+  background: linear-gradient(130deg, #fca5a5, #fda4af);
+}
+
+@media (max-width: 980px) {
   .app { grid-template-columns: 1fr; }
-  .sidebar { border-right: 0; border-bottom: 1px solid var(--line); }
+  .sidebar {
+    border-right: 0;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+    grid-template-rows: auto auto;
+  }
+  #sessionList { max-height: 180px; }
+  .panel { height: auto; min-height: calc(100vh - 280px); }
+  .config-form { grid-template-columns: 1fr; }
 }

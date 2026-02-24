@@ -1,4 +1,4 @@
-use anyhow::Result;
+use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 use std::env;
 use std::fs;
@@ -8,6 +8,8 @@ use std::path::PathBuf;
 use crate::runtime_assets::{DEFAULT_AGENT_JSON, DEFAULT_ENV_EXAMPLE};
 
 const DEFAULT_WORKSPACE_DIR: &str = ".chaos-bot";
+const DEFAULT_CONFIG_FILE_NAME: &str = "config.json";
+const LEGACY_CONFIG_FILE_NAME: &str = "agent.json";
 
 #[derive(Clone, Debug)]
 pub struct AppConfig {
@@ -23,6 +25,7 @@ pub struct AppConfig {
     pub max_iterations: usize,
     pub token_budget: u32,
     pub workspace: PathBuf,
+    pub config_path: PathBuf,
     pub log_level: String,
     pub log_retention_days: u16,
     pub log_dir: PathBuf,
@@ -32,10 +35,17 @@ pub struct AppConfig {
     pub memory_file: PathBuf,
 }
 
+#[derive(Clone, Debug)]
+pub struct LoadedConfig {
+    pub app: AppConfig,
+    pub file: AgentFileConfig,
+    pub raw: String,
+}
+
 impl Default for AppConfig {
     fn default() -> Self {
         let cwd = env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
-        let workspace_base = home_dir().unwrap_or_else(|| cwd.clone());
+        let workspace_base = workspace_base_for(&cwd);
         let workspace = default_workspace_path(&workspace_base);
         Self {
             host: "0.0.0.0".to_string(),
@@ -49,6 +59,7 @@ impl Default for AppConfig {
             max_tokens: 1024,
             max_iterations: 6,
             token_budget: 12_000,
+            config_path: default_config_path_for_workspace(&workspace),
             log_level: "info".to_string(),
             log_retention_days: 7,
             log_dir: workspace.join("logs"),
@@ -63,15 +74,17 @@ impl Default for AppConfig {
 
 impl AppConfig {
     pub fn load() -> Result<Self> {
-        dotenvy::dotenv().ok();
+        Ok(Self::load_with_source()?.app)
+    }
+
+    pub fn load_with_source() -> Result<LoadedConfig> {
         let cwd = env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
-        let default_agent_file_path =
-            default_workspace_path(&home_dir().unwrap_or_else(|| cwd.clone())).join("agent.json");
-        let agent_file_path = env::var("AGENT_CONFIG_PATH")
-            .map(PathBuf::from)
-            .unwrap_or(default_agent_file_path);
-        let resolved_agent_file_path = resolve_config_path(&cwd, &agent_file_path);
-        Self::from_agent_file_path(&resolved_agent_file_path, EnvSecrets::from_env(), cwd)
+        let workspace_base = workspace_base_for(&cwd);
+        let workspace = default_workspace_path(&workspace_base);
+        let config_path = select_default_config_path(&workspace);
+        let (app, file, raw) =
+            Self::from_config_file_path(&config_path, EnvSecrets::from_env(), cwd)?;
+        Ok(LoadedConfig { app, file, raw })
     }
 
     pub fn from_agent_file_path(
@@ -79,12 +92,21 @@ impl AppConfig {
         env_secrets: EnvSecrets,
         cwd: PathBuf,
     ) -> Result<Self> {
-        let agent_path = resolve_config_path(&cwd, path);
-        ensure_runtime_config_files(&agent_path)?;
-        let content = fs::read_to_string(&agent_path)?;
-        let file_config: AgentFileConfig = serde_json::from_str(&content)?;
-        let workspace_base = home_dir().unwrap_or(cwd);
-        Ok(Self::from_inputs(file_config, env_secrets, workspace_base))
+        Ok(Self::from_config_file_path(path, env_secrets, cwd)?.0)
+    }
+
+    pub fn from_config_file_path(
+        path: &Path,
+        env_secrets: EnvSecrets,
+        cwd: PathBuf,
+    ) -> Result<(Self, AgentFileConfig, String)> {
+        let config_path = resolve_config_path(&cwd, path);
+        ensure_runtime_config_files(&config_path)?;
+        let (file_config, raw) = read_config_file(&config_path)?;
+        let workspace_base = workspace_base_for(&cwd);
+        let mut app = Self::from_inputs(file_config.clone(), env_secrets, workspace_base);
+        app.config_path = config_path;
+        Ok((app, file_config, raw))
     }
 
     pub fn from_inputs(
@@ -93,9 +115,8 @@ impl AppConfig {
         workspace_base: PathBuf,
     ) -> Self {
         let defaults = Self::defaults_for_workspace_base(workspace_base.clone());
-        let mut config = defaults.clone();
-
-        // Priority: defaults < env secrets < agent.json secrets
+        let mut config = defaults;
+        // Priority: defaults < env secrets < config secrets
         config.openai_api_key = env_secrets.openai_api_key;
         config.anthropic_api_key = env_secrets.anthropic_api_key;
         config.gemini_api_key = env_secrets.gemini_api_key;
@@ -168,6 +189,7 @@ impl AppConfig {
             max_tokens: 1024,
             max_iterations: 6,
             token_budget: 12_000,
+            config_path: default_config_path_for_workspace(&workspace),
             log_level: "info".to_string(),
             log_retention_days: 7,
             log_dir: workspace.join("logs"),
@@ -256,6 +278,52 @@ impl AgentFileConfig {
     }
 }
 
+pub fn workspace_base_for(cwd: &Path) -> PathBuf {
+    home_dir().unwrap_or_else(|| cwd.to_path_buf())
+}
+
+pub fn default_workspace_path(base: &Path) -> PathBuf {
+    base.join(DEFAULT_WORKSPACE_DIR)
+}
+
+pub fn default_config_path_for_workspace(workspace: &Path) -> PathBuf {
+    workspace.join(DEFAULT_CONFIG_FILE_NAME)
+}
+
+pub fn legacy_config_path_for_workspace(workspace: &Path) -> PathBuf {
+    workspace.join(LEGACY_CONFIG_FILE_NAME)
+}
+
+pub fn select_default_config_path(workspace: &Path) -> PathBuf {
+    let default = default_config_path_for_workspace(workspace);
+    if default.exists() {
+        return default;
+    }
+    let legacy = legacy_config_path_for_workspace(workspace);
+    if legacy.exists() {
+        legacy
+    } else {
+        default
+    }
+}
+
+pub fn read_config_file(path: &Path) -> Result<(AgentFileConfig, String)> {
+    let raw = fs::read_to_string(path)
+        .with_context(|| format!("failed to read config file: {}", path.display()))?;
+    let parsed = serde_json::from_str::<AgentFileConfig>(&raw)
+        .with_context(|| format!("invalid config json: {}", path.display()))?;
+    Ok((parsed, raw))
+}
+
+pub fn write_config_file(path: &Path, config: &AgentFileConfig) -> Result<String> {
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent)?;
+    }
+    let raw = format!("{}\n", serde_json::to_string_pretty(config)?);
+    fs::write(path, &raw).with_context(|| format!("failed to write config: {}", path.display()))?;
+    Ok(raw)
+}
+
 fn resolve_workspace_path(base: &Path, workspace: PathBuf) -> PathBuf {
     if workspace.is_absolute() {
         workspace
@@ -290,19 +358,15 @@ fn resolve_config_path(cwd: &Path, path: &Path) -> PathBuf {
     }
 }
 
-fn default_workspace_path(base: &Path) -> PathBuf {
-    base.join(DEFAULT_WORKSPACE_DIR)
-}
-
 fn home_dir() -> Option<PathBuf> {
     env::var_os("HOME")
         .map(PathBuf::from)
         .filter(|path| !path.as_os_str().is_empty())
 }
 
-fn ensure_runtime_config_files(agent_path: &Path) -> Result<()> {
-    ensure_file_exists_with_default(agent_path, DEFAULT_AGENT_JSON)?;
-    let env_example_path = agent_path
+fn ensure_runtime_config_files(config_path: &Path) -> Result<()> {
+    ensure_file_exists_with_default(config_path, DEFAULT_AGENT_JSON)?;
+    let env_example_path = config_path
         .parent()
         .unwrap_or_else(|| Path::new("."))
         .join(".env.example");

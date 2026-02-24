@@ -1,0 +1,56 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+      - feat/**
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Rust Cache
+        uses: Swatinem/rust-cache@v2
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: e2e/package-lock.json
+
+      - name: Install e2e dependencies
+        working-directory: e2e
+        run: npm ci
+
+      - name: Install Playwright browsers
+        working-directory: e2e
+        run: npx playwright install --with-deps
+
+      - name: Run full test gate
+        env:
+          CHAOS_BOT_KEEP_TMP_ON_FAIL: "1"
+        run: make test-all
+
+      - name: Upload failure artifacts (runtime logs/config/playwright)
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: chaos-bot-failure-artifacts-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            .tmp/unit
+            .tmp/integration
+            .tmp/e2e/runtime
+            .tmp/e2e/artifacts
+          if-no-files-found: ignore
+          retention-days: 14

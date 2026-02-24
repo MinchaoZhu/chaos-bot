@@ -4,12 +4,15 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 PORT="${E2E_PORT:-3010}"
 E2E_TMP_DIR="${E2E_TMP_DIR:-${ROOT_DIR}/.tmp/e2e/runtime}"
+E2E_HOME_DIR="${E2E_TMP_DIR}/home"
+ORIGINAL_HOME="${HOME:-}"
+CONFIG_DIR="${E2E_HOME_DIR}/.chaos-bot"
+CONFIG_FILE="${CONFIG_DIR}/config.json"
 RUNTIME_WORK_DIR="${E2E_TMP_DIR}/workspace"
-TMP_AGENT_FILE="${RUNTIME_WORK_DIR}/agent.json"
 
-mkdir -p "${E2E_TMP_DIR}" "${RUNTIME_WORK_DIR}"
+mkdir -p "${E2E_TMP_DIR}" "${E2E_HOME_DIR}" "${CONFIG_DIR}" "${RUNTIME_WORK_DIR}"
 
-cat >"${TMP_AGENT_FILE}" <<EOF
+cat >"${CONFIG_FILE}" <<EOF_CONFIG
 {
   "server": {
     "host": "127.0.0.1",
@@ -31,12 +34,10 @@ cat >"${TMP_AGENT_FILE}" <<EOF
   },
   "secrets": {}
 }
-EOF
+EOF_CONFIG
 
-cleanup() {
-  rm -f "${TMP_AGENT_FILE}"
-}
-
-trap cleanup EXIT
-
-AGENT_CONFIG_PATH="${TMP_AGENT_FILE}" cargo run -p chaos-bot-backend
+HOME="${E2E_HOME_DIR}" \
+RUSTUP_HOME="${RUSTUP_HOME:-${ORIGINAL_HOME}/.rustup}" \
+CARGO_HOME="${CARGO_HOME:-${ORIGINAL_HOME}/.cargo}" \
+CHAOS_BOT_DISABLE_SELF_RESTART=1 \
+cargo run -p chaos-bot-backend

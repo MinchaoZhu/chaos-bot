@@ -466,3 +466,78 @@ async fn chat_creates_session_when_none_provided() {
     assert!(text.contains("event: session"));
     assert!(text.contains("session_id"));
 }
+
+#[tokio::test]
+async fn config_api_apply_reset_restart_lifecycle() {
+    let (_temp, state, _config_path) = build_test_state_with_config_runtime().await;
+    let app = router(state);
+
+    let get_res = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("GET")
+                .uri("/api/config")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(get_res.status(), StatusCode::OK);
+    let body = to_bytes(get_res.into_body(), usize::MAX).await.unwrap();
+    let mut state_json: Value = serde_json::from_slice(&body).unwrap();
+
+    state_json["running"]["llm"]["model"] = Value::String("mock-next".to_string());
+
+    let apply_res = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/api/config/apply")
+                .header("content-type", "application/json")
+                .body(Body::from(
+                    json!({ "config": state_json["running"].clone() }).to_string(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(apply_res.status(), StatusCode::OK);
+    let body = to_bytes(apply_res.into_body(), usize::MAX).await.unwrap();
+    let apply_json: Value = serde_json::from_slice(&body).unwrap();
+    assert_eq!(apply_json["state"]["running"]["llm"]["model"], "mock-next");
+
+    let backup1 = apply_json["state"]["backup1_path"].as_str().unwrap();
+    assert!(std::path::Path::new(backup1).exists());
+
+    let reset_res = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/api/config/reset")
+                .header("content-type", "application/json")
+                .body(Body::from("{}"))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(reset_res.status(), StatusCode::OK);
+
+    let restart_res = app
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/api/config/restart")
+                .header("content-type", "application/json")
+                .body(Body::from("{}"))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(restart_res.status(), StatusCode::OK);
+    let body = to_bytes(restart_res.into_body(), usize::MAX).await.unwrap();
+    let restart_json: Value = serde_json::from_slice(&body).unwrap();
+    assert_eq!(restart_json["restart_scheduled"], false);
+}

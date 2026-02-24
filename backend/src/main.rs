@@ -2,7 +2,8 @@ use anyhow::Result;
 use chaos_bot_backend::agent::{AgentConfig, AgentLoop};
 use chaos_bot_backend::api::{router, AppState};
 use chaos_bot_backend::bootstrap::bootstrap_runtime_dirs;
-use chaos_bot_backend::config::AppConfig;
+use chaos_bot_backend::config::{workspace_base_for, AgentFileConfig, AppConfig};
+use chaos_bot_backend::config_runtime::{AgentFactory, ConfigRuntime, RestartMode};
 use chaos_bot_backend::llm;
 use chaos_bot_backend::logging::init_logging;
 use chaos_bot_backend::memory::{MemoryBackend, MemoryStore};
@@ -10,14 +11,18 @@ use chaos_bot_backend::personality::{PersonalityLoader, PersonalitySource};
 use chaos_bot_backend::tools::ToolRegistry;
 use std::sync::Arc;
 use tokio::net::TcpListener;
+use tokio::sync::RwLock;
 use tracing::info;
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    let config = AppConfig::load()?;
+    let loaded = AppConfig::load_with_source()?;
+    let config = loaded.app.clone();
+
     let logging_runtime = init_logging(&config)?;
     info!(
         workspace = %config.workspace.display(),
+        config_file = %config.config_path.display(),
         log_dir = %config.log_dir.display(),
         log_file = %logging_runtime.log_file.display(),
         log_level = %config.log_level,
@@ -25,7 +30,17 @@ async fn main() -> Result<()> {
         "chaos-bot logging initialized"
     );
 
-    let state = build_app(&config).await?;
+    let restart_mode = if std::env::var("CHAOS_BOT_DISABLE_SELF_RESTART")
+        .ok()
+        .as_deref()
+        == Some("1")
+    {
+        RestartMode::Disabled
+    } else {
+        RestartMode::ExitProcess
+    };
+
+    let state = build_app_with_config_runtime(&config, loaded.file, restart_mode).await?;
     let app = router(state);
 
     let addr = format!("{}:{}", config.host, config.port);
@@ -41,7 +56,45 @@ async fn main() -> Result<()> {
     Ok(())
 }
 
+struct BackendAgentFactory;
+
+#[async_trait::async_trait]
+impl AgentFactory for BackendAgentFactory {
+    async fn build_agent(&self, config: &AppConfig) -> Result<Arc<AgentLoop>> {
+        build_agent_loop(config).await
+    }
+}
+
 pub async fn build_app(config: &AppConfig) -> Result<AppState> {
+    let agent = build_agent_loop(config).await?;
+    Ok(AppState::new(agent))
+}
+
+pub async fn build_app_with_config_runtime(
+    config: &AppConfig,
+    file_config: AgentFileConfig,
+    restart_mode: RestartMode,
+) -> Result<AppState> {
+    let agent = build_agent_loop(config).await?;
+    let agent_slot = Arc::new(RwLock::new(agent));
+
+    let cwd = std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from("."));
+    let workspace_base = workspace_base_for(&cwd);
+
+    let runtime = Arc::new(ConfigRuntime::new(
+        agent_slot.clone(),
+        Arc::new(BackendAgentFactory),
+        file_config,
+        config.clone(),
+        workspace_base,
+        config.config_path.clone(),
+        restart_mode,
+    ));
+
+    Ok(AppState::with_config_runtime(agent_slot, runtime))
+}
+
+pub async fn build_agent_loop(config: &AppConfig) -> Result<Arc<AgentLoop>> {
     bootstrap_runtime_dirs(config).await?;
     tokio::fs::create_dir_all(&config.memory_dir).await?;
 
@@ -58,15 +111,13 @@ pub async fn build_app(config: &AppConfig) -> Result<AppState> {
     let mut registry = ToolRegistry::new();
     registry.register_default_tools();
 
-    let agent = Arc::new(AgentLoop::new(
+    Ok(Arc::new(AgentLoop::new(
         provider,
         Arc::new(registry),
         personality,
         memory,
         AgentConfig::from(config),
-    ));
-
-    Ok(AppState::new(agent))
+    )))
 }
 
 async fn shutdown_signal() {

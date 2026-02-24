@@ -1,4 +1,6 @@
 use crate::agent::{AgentLoop, AgentStreamEvent, ToolEvent};
+use crate::config::AgentFileConfig;
+use crate::config_runtime::ConfigRuntime;
 use crate::sessions::SessionStore;
 use crate::types::SessionState;
 use axum::extract::{Path, State};
@@ -13,21 +15,38 @@ use serde_json::json;
 use std::convert::Infallible;
 use std::sync::Arc;
 use std::time::Duration;
-use tokio::sync::mpsc;
+use tokio::sync::{mpsc, RwLock};
 use tokio_stream::wrappers::UnboundedReceiverStream;
 
 #[derive(Clone)]
 pub struct AppState {
-    pub agent: Arc<AgentLoop>,
+    pub agent: Arc<RwLock<Arc<AgentLoop>>>,
     pub sessions: SessionStore,
+    pub config_runtime: Option<Arc<ConfigRuntime>>,
 }
 
 impl AppState {
     pub fn new(agent: Arc<AgentLoop>) -> Self {
         Self {
+            agent: Arc::new(RwLock::new(agent)),
+            sessions: SessionStore::new(),
+            config_runtime: None,
+        }
+    }
+
+    pub fn with_config_runtime(
+        agent: Arc<RwLock<Arc<AgentLoop>>>,
+        config_runtime: Arc<ConfigRuntime>,
+    ) -> Self {
+        Self {
             agent,
             sessions: SessionStore::new(),
+            config_runtime: Some(config_runtime),
         }
+    }
+
+    pub async fn current_agent(&self) -> Arc<AgentLoop> {
+        self.agent.read().await.clone()
     }
 }
 
@@ -43,6 +62,32 @@ pub struct HealthResponse {
     pub now: String,
 }
 
+#[derive(Debug, Deserialize, Default)]
+pub struct ConfigMutationRequest {
+    pub raw: Option<String>,
+    pub config: Option<AgentFileConfig>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct ConfigStateResponse {
+    pub config_path: String,
+    pub backup1_path: String,
+    pub backup2_path: String,
+    pub config_format: String,
+    pub running: AgentFileConfig,
+    pub disk: AgentFileConfig,
+    pub raw: String,
+    pub disk_parse_error: Option<String>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct ConfigMutationResponse {
+    pub ok: bool,
+    pub action: &'static str,
+    pub restart_scheduled: bool,
+    pub state: ConfigStateResponse,
+}
+
 pub fn router(state: AppState) -> Router {
     Router::new()
         .route("/", get(index))
@@ -52,6 +97,10 @@ pub fn router(state: AppState) -> Router {
         .route("/api/chat", post(chat))
         .route("/api/sessions", post(create_session).get(list_sessions))
         .route("/api/sessions/:id", get(get_session).delete(delete_session))
+        .route("/api/config", get(get_config))
+        .route("/api/config/reset", post(reset_config))
+        .route("/api/config/apply", post(apply_config))
+        .route("/api/config/restart", post(restart_config))
         .with_state(state)
 }
 
@@ -159,8 +208,8 @@ async fn chat(
                 .data(json!({"session_id": session_id.clone()}).to_string()),
         );
 
-        let result = state
-            .agent
+        let agent = state.current_agent().await;
+        let result = agent
             .run_stream(&mut session, payload.message, |event| match event {
                 AgentStreamEvent::Delta(chunk) => {
                     send_event(Event::default().event("delta").data(chunk));
@@ -213,6 +262,124 @@ async fn chat(
             .interval(Duration::from_secs(15))
             .text("keepalive"),
     )
+}
+
+async fn get_config(
+    State(state): State<AppState>,
+) -> Result<Json<ConfigStateResponse>, axum::http::StatusCode> {
+    let runtime = require_config_runtime(&state)?;
+    let response = build_config_state_response(&runtime).await;
+    Ok(Json(response))
+}
+
+async fn reset_config(
+    State(state): State<AppState>,
+) -> Result<Json<ConfigMutationResponse>, axum::http::StatusCode> {
+    let runtime = require_config_runtime(&state)?;
+    runtime.reset().await.map_err(internal_status)?;
+    let state = build_config_state_response(&runtime).await;
+    Ok(Json(ConfigMutationResponse {
+        ok: true,
+        action: "reset",
+        restart_scheduled: false,
+        state,
+    }))
+}
+
+async fn apply_config(
+    State(state): State<AppState>,
+    Json(payload): Json<ConfigMutationRequest>,
+) -> Result<Json<ConfigMutationResponse>, axum::http::StatusCode> {
+    let runtime = require_config_runtime(&state)?;
+    match (payload.raw, payload.config) {
+        (Some(raw), None) => runtime.apply_raw(&raw).await.map_err(internal_status)?,
+        (None, Some(config)) => runtime
+            .apply_structured(config)
+            .await
+            .map_err(internal_status)?,
+        _ => {
+            return Err(axum::http::StatusCode::BAD_REQUEST);
+        }
+    };
+
+    let state = build_config_state_response(&runtime).await;
+    Ok(Json(ConfigMutationResponse {
+        ok: true,
+        action: "apply",
+        restart_scheduled: false,
+        state,
+    }))
+}
+
+async fn restart_config(
+    State(state): State<AppState>,
+    Json(payload): Json<ConfigMutationRequest>,
+) -> Result<Json<ConfigMutationResponse>, axum::http::StatusCode> {
+    let runtime = require_config_runtime(&state)?;
+    let restart_scheduled = match (payload.raw, payload.config) {
+        (Some(raw), None) => runtime
+            .restart_after_apply_raw(&raw)
+            .await
+            .map_err(internal_status)?,
+        (None, Some(config)) => runtime
+            .restart_after_apply_structured(config)
+            .await
+            .map_err(internal_status)?,
+        (None, None) => runtime.request_restart().await.map_err(internal_status)?,
+        _ => {
+            return Err(axum::http::StatusCode::BAD_REQUEST);
+        }
+    };
+
+    let state = build_config_state_response(&runtime).await;
+    Ok(Json(ConfigMutationResponse {
+        ok: true,
+        action: "restart",
+        restart_scheduled,
+        state,
+    }))
+}
+
+fn require_config_runtime(state: &AppState) -> Result<Arc<ConfigRuntime>, axum::http::StatusCode> {
+    state
+        .config_runtime
+        .clone()
+        .ok_or(axum::http::StatusCode::SERVICE_UNAVAILABLE)
+}
+
+fn internal_status(error: anyhow::Error) -> axum::http::StatusCode {
+    tracing::warn!(error = %error, "config endpoint failed");
+    axum::http::StatusCode::INTERNAL_SERVER_ERROR
+}
+
+async fn build_config_state_response(runtime: &ConfigRuntime) -> ConfigStateResponse {
+    let running = runtime.running_config().await;
+    let (disk, raw, disk_parse_error) = match runtime.disk_config().await {
+        Ok((disk, raw)) => (disk, raw, None),
+        Err(error) => {
+            let fallback_raw = serde_json::to_string_pretty(&running)
+                .map(|text| format!("{text}\n"))
+                .unwrap_or_else(|_| "{}\n".to_string());
+            (running.clone(), fallback_raw, Some(error.to_string()))
+        }
+    };
+
+    let config_path = runtime.config_path().to_path_buf();
+    let config_format = config_path
+        .file_name()
+        .map(|name| name.to_string_lossy().to_string())
+        .unwrap_or_else(|| "config.json".to_string());
+
+    ConfigStateResponse {
+        config_path: config_path.display().to_string(),
+        backup1_path: runtime.backup_path(1).display().to_string(),
+        backup2_path: runtime.backup_path(2).display().to_string(),
+        config_format,
+        running,
+        disk,
+        raw,
+        disk_parse_error,
+    }
 }
 
 fn tool_event_to_sse(event: ToolEvent) -> Event {

@@ -4,8 +4,8 @@
 - Project: bot
 - Main Repository: /home/debian/projects/chaos-bot
 - Branch: feat/bot
-- Active Task: task-7
-- Last Updated: 2026-02-24T22:46:04+08:00
+- Active Task: task-9
+- Last Updated: 2026-02-25T00:36:46+08:00
 
 ## Task Index
 - task-1: done
@@ -15,17 +15,42 @@
 - task-5: done
 - task-6: done
 - task-7: done
+- task-8: done
+- task-9: done
 
 ## Verification
-- `cargo test --workspace --test unit_bootstrap --test unit_config --test unit_logging` passed (12/12).
-- `cargo test --workspace --test unit_agent --test unit_llm --test unit_tools` passed (80/80).
-- `cargo test --workspace --test api_integration --test api_routes` passed (12/12).
-- `make test-e2e` passed (Playwright 5/5).
+- `cargo test --workspace --test unit_config` passed (7/7).
+- `cargo test --workspace --test api_routes --test api_integration` passed (13/13).
+- `cargo test --workspace --test unit_bootstrap --test unit_logging --test unit_agent --test unit_llm --test unit_tools` passed (84/84).
+- `make test-e2e` passed (Playwright 7/7).
 - `make test-all` passed (unit + integration + e2e).
 
 ## Mandatory Rules
 - Every task must run `make test-all` before it can be marked complete.
 - Every new feature must include a dedicated e2e testing phase in its task plan.
+
+## Config Standards
+- Config file path is fixed by runtime rules; env vars do not select/override config file path.
+- Default config path: `~/.chaos-bot/config.json`.
+- Legacy compatibility: if `~/.chaos-bot/config.json` is missing but `~/.chaos-bot/agent.json` exists, runtime loads `agent.json`.
+- Startup materialization: if no config file exists, runtime creates `~/.chaos-bot/config.json` from embedded defaults.
+- Secrets merge order: env API keys first, then config secrets override if provided.
+- Backup policy: every config write rotates backups as `config.json.bak1` and `config.json.bak2`.
+- Runtime config actions:
+  - `reset`: restore disk config to current running config snapshot.
+  - `apply`: hot-apply new config and rebuild runtime agent.
+  - `restart`: apply config and request process restart (can be disabled by runtime mode).
+
+## CI Artifact Standards
+- CI workflow: `.github/workflows/ci.yml`.
+- Full gate command: `make test-all`.
+- Failure-preserve switch: `CHAOS_BOT_KEEP_TMP_ON_FAIL=1`.
+- Failure artifact upload paths:
+  - `.tmp/unit`
+  - `.tmp/integration`
+  - `.tmp/e2e/runtime`
+  - `.tmp/e2e/artifacts`
+- Retention: 14 days.
 
 ## Logging Standards
 - Workspace path: default `~/.chaos-bot`; log dir default `<workspace>/logs`.
@@ -53,10 +78,12 @@
 - `.pm/bot/task-5.md`: Runtime 资源内嵌初始化与测试 `.tmp` 隔离计划。
 - `.pm/bot/task-6.md`: Workspace 重构与 runtime 物化路径切换计划（默认 `~/.chaos-bot`）。
 - `.pm/bot/task-7.md`: Workspace 日志队列、保留策略、关键点日志与规范落地计划。
+- `.pm/bot/task-8.md`: Config 唯一来源约定、配置中心 UI、默认配置物化、备份轮转与 reset/apply/restart 计划。
+- `.pm/bot/task-9.md`: CI 失败现场 artifact 保留与下载策略。
 - `AGENTS.md`: Shared runtime status, task index, and verification summary.
 - `CLAUDE.md`: Symlink to `AGENTS.md`.
 
 ## Next Actions
-1. 评估 `task-8`：CI 中日志文件（失败现场）artifact 保留与下载策略。
-2. 为日志系统增加可选字段白名单/黑名单，进一步统一敏感信息脱敏策略。
-3. 将日志清理行为增加开关（默认保留当前自动清理策略）。
+1. 评估 `task-10`：配置字段白名单/黑名单与统一敏感信息脱敏策略。
+2. 评估 `task-11`：进程重启 orchestrator（systemd/supervisor hook）与可观测回执。
+3. 为 `unit_tools::write_tool_append_mode` 增加稳定性保障（排查偶发失败根因）。
