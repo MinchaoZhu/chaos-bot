@@ -16,6 +16,7 @@ async fn main() -> Result<()> {
     init_tracing();
 
     let config = AppConfig::load()?;
+    info!(workspace = %config.workspace.display(), "chaos-bot workspace resolved");
     let state = build_app(&config).await?;
     let app = router(state);
 
@@ -98,6 +99,7 @@ mod tests {
         let temp = tempfile::tempdir().expect("tempdir");
         let config = AppConfig {
             provider: "mock".to_string(),
+            workspace: temp.path().to_path_buf(),
             working_dir: temp.path().to_path_buf(),
             personality_dir: temp.path().join("personality"),
             memory_dir: temp.path().join("memory"),

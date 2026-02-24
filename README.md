@@ -11,9 +11,17 @@ chaos-bot is a personal AI agent designed to assist with everyday tasks through 
 ```bash
 make build          # cargo build -p chaos-bot-backend
 make run            # cargo run -p chaos-bot-backend
-make clean-runtime  # delete runtime-generated files and .tmp
+make clean-runtime  # delete workspace runtime files and .tmp
 make test-all       # unit + integration + e2e (all in .tmp, auto-cleaned)
 ```
+
+## Runtime Workspace
+
+chaos-bot uses a dedicated runtime workspace:
+
+- Default workspace: `~/.chaos-bot`
+- All runtime-generated files are created under this workspace.
+- `AGENT_CONFIG_PATH` only selects which config file to load; it does not change workspace defaulting.
 
 ## Runtime Initialization Model
 
@@ -26,14 +34,14 @@ Runtime config and templates are embedded into the backend binary at compile tim
 
 At runtime, missing files are materialized automatically:
 
-- `agent.json`
-- `.env.example`
-- `MEMORY.md`
-- `personality/SOUL.md`
-- `personality/IDENTITY.md`
-- `personality/USER.md`
-- `personality/AGENTS.md`
-- `data/sessions/`
+- `<workspace>/agent.json`
+- `<workspace>/.env.example`
+- `<workspace>/MEMORY.md`
+- `<workspace>/personality/SOUL.md`
+- `<workspace>/personality/IDENTITY.md`
+- `<workspace>/personality/USER.md`
+- `<workspace>/personality/AGENTS.md`
+- `<workspace>/data/sessions/`
 
 Existing files are preserved; only missing files are generated.
 
@@ -43,17 +51,18 @@ Existing files are preserved; only missing files are generated.
 
 ```json
 {
+  "workspace": ".chaos-bot",
   "server": { "host": "0.0.0.0", "port": 3000 },
   "llm": { "provider": "openai", "model": "gpt-4o-mini" },
-  "paths": {
-    "working_dir": ".",
-    "personality_dir": "./personality",
-    "memory_dir": "./memory",
-    "memory_file": "./MEMORY.md"
-  },
   "secrets": {}
 }
 ```
+
+Workspace resolution rules:
+
+- Relative `workspace` values are resolved under `HOME`
+- Absolute `workspace` values are used directly
+- Default `.chaos-bot` resolves to `~/.chaos-bot`
 
 Priority order:
 
@@ -77,15 +86,8 @@ e2e runtime files and Playwright artifacts are also redirected into `.tmp/e2e`.
 ## Runtime vs Source Files
 
 Repository source-of-truth templates are tracked under `templates/`.
-Runtime-generated files at repo root are ignored via `.gitignore`:
-
-- `agent.json`
-- `.env.example`
-- `MEMORY.md`
-- `memory/`
-- `personality/`
-- `data/`
-- `.tmp/`
+Runtime-generated files are stored under workspace (`~/.chaos-bot` by default).
+Only test sandbox output is expected in repo-local `.tmp/`.
 
 ## Cleaning Runtime Files
 

@@ -5,7 +5,7 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 PORT="${E2E_PORT:-3010}"
 E2E_TMP_DIR="${E2E_TMP_DIR:-${ROOT_DIR}/.tmp/e2e/runtime}"
 RUNTIME_WORK_DIR="${E2E_TMP_DIR}/workspace"
-TMP_AGENT_FILE="${E2E_TMP_DIR}/agent.e2e.json"
+TMP_AGENT_FILE="${RUNTIME_WORK_DIR}/agent.json"
 
 mkdir -p "${E2E_TMP_DIR}" "${RUNTIME_WORK_DIR}"
 
@@ -23,12 +23,7 @@ cat >"${TMP_AGENT_FILE}" <<EOF
     "max_iterations": 6,
     "token_budget": 12000
   },
-  "paths": {
-    "working_dir": "${RUNTIME_WORK_DIR}",
-    "personality_dir": "${RUNTIME_WORK_DIR}/personality",
-    "memory_dir": "${RUNTIME_WORK_DIR}/memory",
-    "memory_file": "${RUNTIME_WORK_DIR}/MEMORY.md"
-  },
+  "workspace": "${RUNTIME_WORK_DIR}",
   "secrets": {}
 }
 EOF
