@@ -4,8 +4,8 @@
 - Project: bot
 - Main Repository: /home/debian/projects/chaos-bot
 - Branch: feat/bot
-- Active Task: task-9
-- Last Updated: 2026-02-25T00:36:46+08:00
+- Active Task: task-11
+- Last Updated: 2026-02-25T02:24:18+08:00
 
 ## Task Index
 - task-1: done
@@ -17,13 +17,19 @@
 - task-7: done
 - task-8: done
 - task-9: done
+- task-10: done
+- task-11: todo
 
 ## Verification
 - `cargo test --workspace --test unit_config` passed (7/7).
 - `cargo test --workspace --test api_routes --test api_integration` passed (13/13).
 - `cargo test --workspace --test unit_bootstrap --test unit_logging --test unit_agent --test unit_llm --test unit_tools` passed (84/84).
-- `make test-e2e` passed (Playwright 7/7).
-- `make test-all` passed (unit + integration + e2e).
+- `make test-e2e` passed (Playwright 9 passed, 2 skipped; legacy + react-shell desktop/mobile).
+- `make test-all` passed (unit + integration + e2e, task-10 completion run).
+- `make tauri-preflight` passed (`webkit2gtk-4.1`/`rsvg2`/Rust toolchain detected).
+- `make tauri-build-desktop` passed (debug desktop binary generated at `src-tauri/target/debug/chaos-bot-app`).
+- `make tauri-android-init` passed (Android project generated under `src-tauri/gen/android` with local SDK/NDK + Java 21).
+- `make tauri-android-build` passed (debug universal APK generated at `src-tauri/gen/android/app/build/outputs/apk/universal/debug/app-universal-debug.apk`).
 
 ## Mandatory Rules
 - Every task must run `make test-all` before it can be marked complete.
@@ -80,10 +86,12 @@
 - `.pm/bot/task-7.md`: Workspace 日志队列、保留策略、关键点日志与规范落地计划。
 - `.pm/bot/task-8.md`: Config 唯一来源约定、配置中心 UI、默认配置物化、备份轮转与 reset/apply/restart 计划。
 - `.pm/bot/task-9.md`: CI 失败现场 artifact 保留与下载策略。
+- `.pm/bot/task-10.md`: Tauri v2 + React 多平台前端重构计划。
+- `.pm/bot/task-11.md`: Agent 后端模块化架构重构计划。
 - `AGENTS.md`: Shared runtime status, task index, and verification summary.
 - `CLAUDE.md`: Symlink to `AGENTS.md`.
 
 ## Next Actions
-1. 评估 `task-10`：配置字段白名单/黑名单与统一敏感信息脱敏策略。
-2. 评估 `task-11`：进程重启 orchestrator（systemd/supervisor hook）与可观测回执。
-3. 为 `unit_tools::write_tool_append_mode` 增加稳定性保障（排查偶发失败根因）。
+1. 启动 `task-11` Phase 1，冻结后端模块边界与迁移顺序。
+2. 在具备 Linux 桌面依赖 + Android SDK/JDK 的构建机复跑 `tauri` 打包链路并产出安装包。
+3. 评估 iOS 构建机（macOS + Xcode）以补齐移动发布矩阵。

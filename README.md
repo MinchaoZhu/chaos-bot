@@ -13,7 +13,112 @@ make build          # cargo build -p chaos-bot-backend
 make run            # cargo run -p chaos-bot-backend
 make clean-runtime  # delete workspace runtime files and .tmp
 make test-all       # unit + integration + e2e (all in .tmp, auto-cleaned)
+make frontend-dev   # run React shell dev server (http://127.0.0.1:1420)
+make tauri-dev      # run Tauri v2 desktop app shell
 ```
+
+## Tauri v2 + React (Phase 1 Foundation)
+
+The repo now includes a parallel multi-platform frontend scaffold:
+
+- `frontend-react/`: Vite + React + TypeScript shell UI.
+- `src-tauri/`: Tauri v2 runtime crate and invoke command bridge.
+- Runtime contract: `frontend-react/RUNTIME_CONTRACT.md`.
+
+Current compatibility mode:
+
+- Existing backend-served static UI (`frontend/`) remains active for current test suites.
+- New Tauri + React shell uses the same backend API (`/api/*`) and SSE stream protocol.
+
+### Build/Run Entry Points
+
+```bash
+make frontend-install     # install frontend-react dependencies
+make frontend-dev         # web shell dev mode
+make frontend-build       # build React shell
+make tauri-preflight      # check host prerequisites for Tauri desktop/mobile
+make tauri-dev            # desktop shell
+make tauri-build-desktop  # desktop debug build (no native bundle)
+make tauri-android-init   # generate Android project scaffold
+make tauri-android-dev    # Android dev shell (requires Android toolchain)
+make tauri-android-build  # Android debug APK build
+make tauri-ios-dev        # iOS dev shell (requires Xcode/macOS)
+```
+
+### Dependency Matrix
+
+- Desktop: Rust toolchain + Node.js 20+ + Tauri CLI.
+- Android: desktop requirements + Android SDK/NDK/JDK.
+- iOS: desktop requirements + macOS + Xcode command line tools.
+
+### Android Reusable Build Profile
+
+Recommended host baseline (Debian trixie):
+
+```bash
+sudo apt-get update
+sudo apt-get install -y \
+  libwebkit2gtk-4.1-dev \
+  libgtk-3-dev \
+  librsvg2-dev \
+  libayatana-appindicator3-dev \
+  build-essential \
+  pkg-config \
+  openjdk-21-jdk
+```
+
+Project-local Android SDK/NDK profile (keeps host clean and reproducible):
+
+```bash
+export JAVA_HOME=/usr/lib/jvm/java-21-openjdk-amd64
+export ANDROID_HOME="$PWD/.tmp/android-sdk"
+export ANDROID_SDK_ROOT="$PWD/.tmp/android-sdk"
+export ANDROID_NDK_HOME="$PWD/.tmp/android-sdk/ndk/26.3.11579264"
+export NDK_HOME="$PWD/.tmp/android-sdk/ndk/26.3.11579264"
+export PATH="$PWD/.tmp/android-sdk/cmdline-tools/latest/bin:$PWD/.tmp/android-sdk/platform-tools:$PATH"
+```
+
+With the profile above:
+
+```bash
+make tauri-android-init
+make tauri-android-build
+```
+
+APK output (debug universal):
+
+- `src-tauri/gen/android/app/build/outputs/apk/universal/debug/app-universal-debug.apk`
+
+### Adaptive Layout (Phase 2)
+
+`frontend-react` now uses a shared component architecture with a layout adapter:
+
+- `src/layout/adapter.ts`: viewport-driven desktop/mobile mode selection.
+- `src/components/SessionRail.tsx`: session list + runtime controls.
+- `src/components/ConversationPanel.tsx`: message timeline + composer.
+- `src/components/EventTimeline.tsx`: streamed event log + runtime error surface.
+- `src/components/MobilePaneTabs.tsx`: mobile pane switcher (`chat/sessions/events`).
+
+Desktop uses a multi-panel landscape layout. Mobile uses a single-column portrait flow
+with pane switching, while reusing the same runtime contract and business actions.
+
+### Packaging Matrix (Phase 3)
+
+- Packaging runbook: `docs/tauri-packaging.md`
+- Desktop chain:
+  - `make tauri-preflight`
+  - `make tauri-build-desktop`
+- Android chain:
+  - `make tauri-android-init`
+  - `make tauri-android-build`
+- iOS chain:
+  - `make tauri-ios-dev` (macOS only)
+
+### Build Architecture Notes (Reusable)
+
+- Tauri JS CLI is managed in `frontend-react/` (`@tauri-apps/cli` installed once there).
+- `src-tauri/package.json` provides a bridge script for Android Gradle tasks that execute `npm run tauri ...`.
+- This avoids duplicating Node dependencies inside `src-tauri/` while keeping Android `rustBuild*` tasks compatible.
 
 ## Runtime Workspace
 
@@ -121,6 +226,12 @@ All test suites run in dedicated `.tmp` sandboxes and are deleted after executio
 - `make test-e2e` -> `.tmp/e2e`
 
 e2e runtime files and Playwright artifacts are also redirected into `.tmp/e2e`.
+
+Current e2e matrix (`make test-e2e`):
+
+- `legacy-ui`: existing backend-served static frontend regression suite.
+- `react-shell-desktop`: React shell desktop landscape flow.
+- `react-shell-mobile`: React shell mobile portrait flow (Playwright device emulation).
 
 ## CI Failure Artifacts
 
