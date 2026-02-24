@@ -17,6 +17,7 @@ fn make_config(root: PathBuf, personality_dir: PathBuf) -> AppConfig {
         max_iterations: 3,
         token_budget: 2_000,
         workspace: root.clone(),
+        config_path: root.join("config.json"),
         log_level: "info".to_string(),
         log_retention_days: 7,
         log_dir: root.join("logs"),

@@ -5,10 +5,14 @@ use anyhow::Result;
 use async_trait::async_trait;
 use chaos_bot_backend::agent::{AgentConfig, AgentLoop};
 use chaos_bot_backend::api::AppState;
+use chaos_bot_backend::config::{
+    write_config_file, AgentFileConfig, AgentLlmConfig, AgentLoggingConfig, AgentSecretsConfig,
+    AgentServerConfig, AppConfig, EnvSecrets,
+};
+use chaos_bot_backend::config_runtime::{AgentFactory, ConfigRuntime, RestartMode};
 use chaos_bot_backend::llm::{LlmProvider, LlmRequest, LlmResponse, LlmStream, LlmStreamEvent};
 use chaos_bot_backend::memory::{MemoryBackend, MemoryStore};
 use chaos_bot_backend::personality::{PersonalityLoader, PersonalitySource};
-use chaos_bot_backend::sessions::SessionStore;
 use chaos_bot_backend::tools::{Tool, ToolContext, ToolRegistry};
 use chaos_bot_backend::types::{Message, ToolCall, ToolExecution, ToolSpec, Usage};
 use futures::stream;
@@ -16,6 +20,7 @@ use serde_json::{json, Value};
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 use tempfile::TempDir;
+use tokio::sync::RwLock;
 
 // ---------------------------------------------------------------------------
 // MockStreamProvider
@@ -283,10 +288,7 @@ pub fn build_test_state_with_registry(
         default_agent_config(temp.path().to_path_buf()),
     );
 
-    let state = AppState {
-        agent: Arc::new(agent),
-        sessions: SessionStore::new(),
-    };
+    let state = AppState::new(Arc::new(agent));
 
     (temp, state)
 }
@@ -316,6 +318,103 @@ pub fn build_test_agent_with_registry(
     );
 
     (temp, agent)
+}
+
+struct RuntimeTestAgentFactory;
+
+#[async_trait]
+impl AgentFactory for RuntimeTestAgentFactory {
+    async fn build_agent(&self, config: &AppConfig) -> Result<Arc<AgentLoop>> {
+        let memory: Arc<dyn MemoryBackend> = Arc::new(MemoryStore::new(
+            config.memory_dir.clone(),
+            config.memory_file.clone(),
+        ));
+        memory.ensure_layout().await?;
+
+        std::fs::create_dir_all(&config.personality_dir)?;
+        if !config.personality_dir.join("SOUL.md").exists() {
+            std::fs::write(
+                config.personality_dir.join("SOUL.md"),
+                "# Soul\nTest soul content.",
+            )?;
+        }
+        let personality: Arc<dyn PersonalitySource> =
+            Arc::new(PersonalityLoader::new(config.personality_dir.clone()));
+
+        let agent = AgentLoop::new(
+            Arc::new(MockStreamProvider::text("runtime factory")),
+            Arc::new(ToolRegistry::new()),
+            personality,
+            memory,
+            AgentConfig {
+                model: config.model.clone(),
+                temperature: config.temperature,
+                max_tokens: config.max_tokens,
+                max_iterations: config.max_iterations,
+                token_budget: config.token_budget,
+                working_dir: config.working_dir.clone(),
+            },
+        );
+
+        Ok(Arc::new(agent))
+    }
+}
+
+pub async fn build_test_state_with_config_runtime() -> (TempDir, AppState, PathBuf) {
+    let temp = tempfile::tempdir().expect("tempdir");
+    let workspace_base = temp.path().join("home");
+    std::fs::create_dir_all(&workspace_base).expect("create home");
+
+    let config_file = AgentFileConfig {
+        workspace: Some(PathBuf::from("./runtime")),
+        logging: AgentLoggingConfig {
+            level: Some("info".to_string()),
+            retention_days: Some(7),
+            directory: Some(PathBuf::from("logs")),
+        },
+        server: AgentServerConfig {
+            host: Some("127.0.0.1".to_string()),
+            port: Some(3010),
+        },
+        llm: AgentLlmConfig {
+            provider: Some("mock".to_string()),
+            model: Some("mock-model".to_string()),
+            temperature: Some(0.2),
+            max_tokens: Some(1024),
+            max_iterations: Some(6),
+            token_budget: Some(12000),
+        },
+        secrets: AgentSecretsConfig::default(),
+    };
+
+    let mut app_config = AppConfig::from_inputs(
+        config_file.clone(),
+        EnvSecrets::default(),
+        workspace_base.clone(),
+    );
+    let config_path = workspace_base.join(".chaos-bot/config.json");
+    app_config.config_path = config_path.clone();
+    write_config_file(&config_path, &config_file).expect("write config");
+
+    let factory: Arc<dyn AgentFactory> = Arc::new(RuntimeTestAgentFactory);
+    let initial_agent = factory
+        .build_agent(&app_config)
+        .await
+        .expect("build initial agent");
+    let agent_slot = Arc::new(RwLock::new(initial_agent));
+
+    let runtime = Arc::new(ConfigRuntime::new(
+        agent_slot.clone(),
+        factory,
+        config_file,
+        app_config,
+        workspace_base,
+        config_path.clone(),
+        RestartMode::Disabled,
+    ));
+
+    let state = AppState::with_config_runtime(agent_slot, runtime);
+    (temp, state, config_path)
 }
 
 pub fn temp_personality_dir() -> (TempDir, PersonalityLoader) {

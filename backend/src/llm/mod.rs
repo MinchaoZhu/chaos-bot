@@ -51,26 +51,29 @@ pub trait LlmProvider: Send + Sync {
 pub fn build_provider(config: &AppConfig) -> Result<Arc<dyn LlmProvider>> {
     match config.provider.to_lowercase().as_str() {
         "openai" => {
-            let api_key = config
-                .openai_api_key
-                .clone()
-                .ok_or_else(|| anyhow!("openai_api_key is required (set OPENAI_API_KEY or agent.json secrets.openai_api_key)"))?;
+            let api_key = config.openai_api_key.clone().ok_or_else(|| {
+                anyhow!(
+                    "openai_api_key is required (set OPENAI_API_KEY or config secrets.openai_api_key)"
+                )
+            })?;
             info!(provider = "openai", "llm provider selected");
             Ok(Arc::new(OpenAiProvider::new(api_key)))
         }
         "anthropic" => {
-            config
-                .anthropic_api_key
-                .as_ref()
-                .ok_or_else(|| anyhow!("anthropic_api_key is required (set ANTHROPIC_API_KEY or agent.json secrets.anthropic_api_key)"))?;
+            config.anthropic_api_key.as_ref().ok_or_else(|| {
+                anyhow!(
+                    "anthropic_api_key is required (set ANTHROPIC_API_KEY or config secrets.anthropic_api_key)"
+                )
+            })?;
             info!(provider = "anthropic", "llm provider selected");
             Ok(Arc::new(AnthropicProvider))
         }
         "gemini" => {
-            config
-                .gemini_api_key
-                .as_ref()
-                .ok_or_else(|| anyhow!("gemini_api_key is required (set GEMINI_API_KEY or agent.json secrets.gemini_api_key)"))?;
+            config.gemini_api_key.as_ref().ok_or_else(|| {
+                anyhow!(
+                    "gemini_api_key is required (set GEMINI_API_KEY or config secrets.gemini_api_key)"
+                )
+            })?;
             info!(provider = "gemini", "llm provider selected");
             Ok(Arc::new(GeminiProvider))
         }
@@ -86,7 +89,7 @@ pub fn build_provider(config: &AppConfig) -> Result<Arc<dyn LlmProvider>> {
 }
 
 /// Built-in mock provider for testing without API keys.
-/// Activated via `agent.json` (`llm.provider = "mock"`). Returns canned responses and
+/// Activated via runtime config (`llm.provider = "mock"`). Returns canned responses and
 /// optionally simulates tool calls when the input contains "use_tool:".
 pub struct MockProvider;
 

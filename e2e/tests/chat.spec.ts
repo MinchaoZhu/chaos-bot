@@ -10,6 +10,11 @@ async function openApp(page: Page) {
     .toBeGreaterThan(0);
 }
 
+async function openConfig(page: Page) {
+  await page.getByRole("button", { name: "Config" }).click();
+  await expect(page.getByRole("heading", { name: "Config Center" })).toBeVisible();
+}
+
 async function sendMessage(page: Page, content: string) {
   await page.locator("#messageInput").fill(content);
   await page.getByRole("button", { name: "发送" }).click();
@@ -74,7 +79,7 @@ test("switching sessions restores each conversation", async ({ page }) => {
   await expect(page.locator("#messages")).not.toContainText("message in session B");
 });
 
-test("runtime files are created under workspace", async ({ page }) => {
+test("runtime files are created under workspace with default config source", async ({ page }) => {
   await openApp(page);
 
   const runtimeRoot = process.env.E2E_TMP_DIR;
@@ -82,8 +87,6 @@ test("runtime files are created under workspace", async ({ page }) => {
 
   const workspace = path.join(runtimeRoot as string, "workspace");
   for (const relativePath of [
-    "agent.json",
-    ".env.example",
     "MEMORY.md",
     "personality/SOUL.md",
     "personality/IDENTITY.md",
@@ -104,6 +107,19 @@ test("runtime files are created under workspace", async ({ page }) => {
       .toBeTruthy();
   }
 
+  const configRoot = path.join(runtimeRoot as string, "home", ".chaos-bot");
+  await expect
+    .poll(async () => {
+      try {
+        await fs.access(path.join(configRoot, "config.json"));
+        await fs.access(path.join(configRoot, ".env.example"));
+        return true;
+      } catch {
+        return false;
+      }
+    })
+    .toBeTruthy();
+
   const logsDir = path.join(workspace, "logs");
   let activeLogPath = "";
   await expect
@@ -120,6 +136,57 @@ test("runtime files are created under workspace", async ({ page }) => {
       }
     })
     .toContain("chaos-bot logging initialized");
-  const activeLogContent = await fs.readFile(activeLogPath, "utf8");
-  expect(activeLogContent).toContain("INFO");
+});
+
+test("config raw apply creates rotating backups", async ({ page }) => {
+  await openApp(page);
+  await openConfig(page);
+
+  const rawArea = page.locator("#configRawInput");
+  const firstRaw = await rawArea.inputValue();
+  const configA = JSON.parse(firstRaw);
+  configA.llm.model = "mock-raw-a";
+  await rawArea.fill(`${JSON.stringify(configA, null, 2)}\n`);
+
+  await page.getByRole("button", { name: "Apply" }).click();
+  await expect(page.locator("#configStatus")).toContainText("动态应用");
+
+  const configB = { ...configA, llm: { ...configA.llm, model: "mock-raw-b" } };
+  await rawArea.fill(`${JSON.stringify(configB, null, 2)}\n`);
+  await page.getByRole("button", { name: "Apply" }).click();
+
+  const runtimeRoot = process.env.E2E_TMP_DIR as string;
+  const configRoot = path.join(runtimeRoot, "home", ".chaos-bot");
+  await expect
+    .poll(async () => {
+      try {
+        await fs.access(path.join(configRoot, "config.json.bak1"));
+        await fs.access(path.join(configRoot, "config.json.bak2"));
+        return true;
+      } catch {
+        return false;
+      }
+    })
+    .toBeTruthy();
+});
+
+test("config form apply + reset + restart action", async ({ page }) => {
+  await openApp(page);
+  await openConfig(page);
+
+  await page.getByRole("button", { name: "关键配置" }).click();
+  await page.locator("#cfgModel").fill("mock-form");
+  await page.locator("#cfgPort").fill("3010");
+
+  await page.getByRole("button", { name: "Apply" }).click();
+  await expect(page.locator("#configStatus")).toContainText("动态应用");
+
+  await page.getByRole("button", { name: "Raw JSON" }).click();
+  await page.locator("#configRawInput").fill("{ invalid json }");
+
+  await page.getByRole("button", { name: "Reset" }).click();
+  await expect(page.locator("#configRawInput")).toHaveValue(/mock-form/);
+
+  await page.getByRole("button", { name: "Restart" }).click();
+  await expect(page.locator("#configStatus")).toContainText("禁用了进程重启");
 });

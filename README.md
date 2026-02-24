@@ -21,7 +21,7 @@ chaos-bot uses a dedicated runtime workspace:
 
 - Default workspace: `~/.chaos-bot`
 - All runtime-generated files are created under this workspace.
-- `AGENT_CONFIG_PATH` only selects which config file to load; it does not change workspace defaulting.
+- Runtime config is loaded from `~/.chaos-bot/config.json` by default.
 
 ## Runtime Initialization Model
 
@@ -34,8 +34,8 @@ Runtime config and templates are embedded into the backend binary at compile tim
 
 At runtime, missing files are materialized automatically:
 
-- `<workspace>/agent.json`
-- `<workspace>/.env.example`
+- `~/.chaos-bot/config.json` (default config source)
+- `~/.chaos-bot/.env.example`
 - `<workspace>/MEMORY.md`
 - `<workspace>/personality/SOUL.md`
 - `<workspace>/personality/IDENTITY.md`
@@ -45,9 +45,10 @@ At runtime, missing files are materialized automatically:
 
 Existing files are preserved; only missing files are generated.
 
-## Runtime Configuration (`agent.json`)
+## Runtime Configuration (`config.json`)
 
-`agent.json` is runtime-generated from the embedded template if missing.
+`~/.chaos-bot/config.json` is runtime-generated from the embedded template if missing.
+Legacy compatibility: if `config.json` is absent but `~/.chaos-bot/agent.json` exists, runtime uses `agent.json`.
 
 ```json
 {
@@ -78,11 +79,22 @@ Logging rules:
 Priority order:
 
 1. Embedded defaults
-2. Environment secrets (`OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `GEMINI_API_KEY`)
-3. `agent.json` secrets (final override)
+2. Environment API keys (`OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `GEMINI_API_KEY`)
+3. Config file values (`config.json` / legacy `agent.json`) as final override
 
-`CHAOS_*` runtime environment variables are not used.
-You can override config path with `AGENT_CONFIG_PATH`.
+`CHAOS_*` runtime environment variables are not used for config.
+
+### Config Management API
+
+- `GET /api/config`: read current running/disk config snapshot
+- `POST /api/config/reset`: restore disk config to running snapshot
+- `POST /api/config/apply`: hot-apply config (`raw` JSON or structured `config`)
+- `POST /api/config/restart`: apply config then request process restart
+
+Every config write rotates backups in-place:
+
+- `<config_file>.bak1`
+- `<config_file>.bak2`
 
 ## Logging
 
@@ -109,6 +121,24 @@ All test suites run in dedicated `.tmp` sandboxes and are deleted after executio
 - `make test-e2e` -> `.tmp/e2e`
 
 e2e runtime files and Playwright artifacts are also redirected into `.tmp/e2e`.
+
+## CI Failure Artifacts
+
+GitHub Actions workflow: `.github/workflows/ci.yml`
+
+- CI runs `make test-all` with `CHAOS_BOT_KEEP_TMP_ON_FAIL=1`.
+- On failure, CI uploads these artifact directories:
+  - `.tmp/unit`
+  - `.tmp/integration`
+  - `.tmp/e2e/runtime`
+  - `.tmp/e2e/artifacts`
+- Retention policy: 14 days.
+
+This captures failure-time runtime evidence including:
+
+- workspace logs (`.tmp/e2e/runtime/workspace/logs/*.log`)
+- config and backups (`.tmp/e2e/runtime/home/.chaos-bot/config.json*`)
+- Playwright report and traces (`.tmp/e2e/artifacts/*`)
 
 ## Runtime vs Source Files
 

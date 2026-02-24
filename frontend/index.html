@@ -13,15 +13,102 @@
         <h1>chaos-bot</h1>
         <button id="newSessionBtn">新建会话</button>
       </div>
+
+      <div class="main-tabs" role="tablist" aria-label="主导航">
+        <button id="chatTabBtn" class="main-tab active" data-main-tab="chat" type="button">Chat</button>
+        <button id="configTabBtn" class="main-tab" data-main-tab="config" type="button">Config</button>
+      </div>
+
       <ul id="sessionList"></ul>
     </aside>
 
-    <main class="chat-panel">
-      <div id="messages" class="messages"></div>
-      <form id="chatForm" class="composer">
-        <input id="messageInput" placeholder="输入消息..." autocomplete="off" />
-        <button type="submit">发送</button>
-      </form>
+    <main class="content">
+      <section id="chatView" class="panel active" data-main-view="chat">
+        <div id="messages" class="messages"></div>
+        <form id="chatForm" class="composer">
+          <input id="messageInput" placeholder="输入消息..." autocomplete="off" />
+          <button type="submit">发送</button>
+        </form>
+      </section>
+
+      <section id="configView" class="panel" data-main-view="config" hidden>
+        <header class="config-head">
+          <h2>Config Center</h2>
+          <p id="configMeta">加载中...</p>
+        </header>
+
+        <div class="config-tabs" role="tablist" aria-label="配置编辑模式">
+          <button id="configRawTabBtn" class="config-tab active" data-config-tab="raw" type="button">Raw JSON</button>
+          <button id="configFormTabBtn" class="config-tab" data-config-tab="form" type="button">关键配置</button>
+        </div>
+
+        <div id="configStatus" class="config-status" aria-live="polite"></div>
+
+        <section id="configRawView" class="config-view active" data-config-view="raw">
+          <textarea id="configRawInput" spellcheck="false" aria-label="Raw JSON"></textarea>
+        </section>
+
+        <section id="configFormView" class="config-view" data-config-view="form" hidden>
+          <form id="configForm" class="config-form">
+            <label>workspace
+              <input id="cfgWorkspace" type="text" />
+            </label>
+            <label>server.host
+              <input id="cfgHost" type="text" />
+            </label>
+            <label>server.port
+              <input id="cfgPort" type="number" min="1" step="1" />
+            </label>
+            <label>llm.provider
+              <input id="cfgProvider" type="text" />
+            </label>
+            <label>llm.model
+              <input id="cfgModel" type="text" />
+            </label>
+            <label>llm.temperature
+              <input id="cfgTemperature" type="number" step="0.01" />
+            </label>
+            <label>llm.max_tokens
+              <input id="cfgMaxTokens" type="number" min="1" step="1" />
+            </label>
+            <label>llm.max_iterations
+              <input id="cfgMaxIterations" type="number" min="1" step="1" />
+            </label>
+            <label>llm.token_budget
+              <input id="cfgTokenBudget" type="number" min="1" step="1" />
+            </label>
+            <label>logging.level
+              <select id="cfgLogLevel">
+                <option value="debug">debug</option>
+                <option value="info">info</option>
+                <option value="warning">warning</option>
+                <option value="error">error</option>
+              </select>
+            </label>
+            <label>logging.retention_days
+              <input id="cfgRetentionDays" type="number" min="1" step="1" />
+            </label>
+            <label>logging.directory
+              <input id="cfgLogDir" type="text" />
+            </label>
+            <label>secrets.openai_api_key
+              <input id="cfgOpenAiKey" type="password" autocomplete="off" />
+            </label>
+            <label>secrets.anthropic_api_key
+              <input id="cfgAnthropicKey" type="password" autocomplete="off" />
+            </label>
+            <label>secrets.gemini_api_key
+              <input id="cfgGeminiKey" type="password" autocomplete="off" />
+            </label>
+          </form>
+        </section>
+
+        <footer class="config-actions">
+          <button id="configResetBtn" class="ghost" type="button">Reset</button>
+          <button id="configApplyBtn" class="primary" type="button">Apply</button>
+          <button id="configRestartBtn" class="danger" type="button">Restart</button>
+        </footer>
+      </section>
     </main>
   </div>
 

@@ -5,7 +5,6 @@ use chaos_bot_backend::api::{router, AppState};
 use chaos_bot_backend::llm::{LlmProvider, LlmRequest, LlmResponse, LlmStream};
 use chaos_bot_backend::memory::{MemoryBackend, MemoryStore};
 use chaos_bot_backend::personality::{PersonalityLoader, PersonalitySource};
-use chaos_bot_backend::sessions::SessionStore;
 use chaos_bot_backend::tools::ToolRegistry;
 use chaos_bot_backend::types::SessionState;
 use std::sync::Arc;
@@ -55,10 +54,7 @@ fn build_state() -> AppState {
         },
     );
 
-    AppState {
-        agent: Arc::new(agent),
-        sessions: SessionStore::new(),
-    }
+    AppState::new(Arc::new(agent))
 }
 
 #[tokio::test]

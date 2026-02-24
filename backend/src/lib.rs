@@ -2,6 +2,7 @@ pub mod agent;
 pub mod api;
 pub mod bootstrap;
 pub mod config;
+pub mod config_runtime;
 pub mod llm;
 pub mod logging;
 pub mod memory;

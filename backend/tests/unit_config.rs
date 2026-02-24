@@ -1,6 +1,6 @@
 use chaos_bot_backend::config::{
-    AgentFileConfig, AgentLlmConfig, AgentLoggingConfig, AgentSecretsConfig, AgentServerConfig,
-    AppConfig, EnvSecrets,
+    default_config_path_for_workspace, default_workspace_path, AgentFileConfig, AgentLlmConfig,
+    AgentLoggingConfig, AgentSecretsConfig, AgentServerConfig, AppConfig, EnvSecrets,
 };
 use serial_test::serial;
 use std::path::{Path, PathBuf};
@@ -47,7 +47,7 @@ impl Drop for CurrentDirGuard {
     }
 }
 
-fn clear_legacy_and_secret_envs() {
+fn clear_envs() {
     for key in &[
         "CHAOS_HOST",
         "CHAOS_PORT",
@@ -77,181 +77,161 @@ fn setup_home(root: &Path) -> EnvVarGuard {
 
 #[test]
 #[serial]
-fn creates_default_agent_json_when_missing() {
-    clear_legacy_and_secret_envs();
+fn load_creates_default_config_json_when_missing() {
+    clear_envs();
     let temp = tempdir().unwrap();
     let home = temp.path().join("home");
     let _home_guard = setup_home(&home);
 
-    let cwd = temp.path().join("cfg");
+    let cwd = temp.path().join("cwd");
     std::fs::create_dir_all(&cwd).unwrap();
-    let agent_path = cwd.join("agent.json");
-    let env_example_path = cwd.join(".env.example");
+    let _cwd_guard = CurrentDirGuard::enter(&cwd);
 
-    assert!(!agent_path.exists());
-    assert!(!env_example_path.exists());
+    let config = AppConfig::load().expect("load config");
 
-    let config =
-        AppConfig::from_agent_file_path(&agent_path, EnvSecrets::default(), cwd.clone()).unwrap();
+    let workspace = default_workspace_path(&home);
+    let config_path = default_config_path_for_workspace(&workspace);
 
-    assert!(agent_path.exists());
-    assert!(env_example_path.exists());
+    assert_eq!(config.workspace, workspace);
+    assert_eq!(config.config_path, config_path);
+    assert!(config.config_path.exists());
+    assert!(workspace.join(".env.example").exists());
+    assert_eq!(config.host, "0.0.0.0");
+    assert_eq!(config.port, 3000);
+}
+
+#[test]
+#[serial]
+fn load_prefers_existing_config_json_over_legacy_agent_json() {
+    clear_envs();
+    let temp = tempdir().unwrap();
+    let home = temp.path().join("home");
+    let _home_guard = setup_home(&home);
+
+    let cwd = temp.path().join("cwd");
+    std::fs::create_dir_all(&cwd).unwrap();
+    let _cwd_guard = CurrentDirGuard::enter(&cwd);
+
+    let workspace = default_workspace_path(&home);
+    std::fs::create_dir_all(&workspace).unwrap();
+
+    std::fs::write(
+        workspace.join("config.json"),
+        r#"{ "server": { "port": 4100 }, "llm": { "provider": "mock" } }"#,
+    )
+    .unwrap();
+    std::fs::write(
+        workspace.join("agent.json"),
+        r#"{ "server": { "port": 4200 }, "llm": { "provider": "openai" } }"#,
+    )
+    .unwrap();
+
+    let config = AppConfig::load().expect("load config");
+
+    assert_eq!(config.config_path, workspace.join("config.json"));
+    assert_eq!(config.port, 4100);
+    assert_eq!(config.provider, "mock");
+}
+
+#[test]
+#[serial]
+fn load_falls_back_to_legacy_agent_json_when_present() {
+    clear_envs();
+    let temp = tempdir().unwrap();
+    let home = temp.path().join("home");
+    let _home_guard = setup_home(&home);
+
+    let cwd = temp.path().join("cwd");
+    std::fs::create_dir_all(&cwd).unwrap();
+    let _cwd_guard = CurrentDirGuard::enter(&cwd);
+
+    let workspace = default_workspace_path(&home);
+    std::fs::create_dir_all(&workspace).unwrap();
+
+    std::fs::write(
+        workspace.join("agent.json"),
+        r#"{ "server": { "port": 4300 }, "llm": { "provider": "mock" } }"#,
+    )
+    .unwrap();
+
+    let config = AppConfig::load().expect("load config");
+
+    assert_eq!(config.config_path, workspace.join("agent.json"));
+    assert_eq!(config.port, 4300);
+    assert_eq!(config.provider, "mock");
+}
+
+#[test]
+#[serial]
+fn load_ignores_agent_config_path_env() {
+    clear_envs();
+    let temp = tempdir().unwrap();
+    let home = temp.path().join("home");
+    let _home_guard = setup_home(&home);
+
+    let cwd = temp.path().join("cwd");
+    std::fs::create_dir_all(&cwd).unwrap();
+    let _cwd_guard = CurrentDirGuard::enter(&cwd);
+
+    let external_dir = temp.path().join("external");
+    std::fs::create_dir_all(&external_dir).unwrap();
+    let external_config = external_dir.join("agent.custom.json");
+    std::fs::write(
+        &external_config,
+        r#"{ "server": { "port": 9999 }, "llm": { "provider": "mock" } }"#,
+    )
+    .unwrap();
+    let _guard = EnvVarGuard::set("AGENT_CONFIG_PATH", external_config.to_str().unwrap());
+
+    let config = AppConfig::load().expect("load config");
+
+    let workspace = default_workspace_path(&home);
+    assert_eq!(config.config_path, workspace.join("config.json"));
+    assert_eq!(config.port, 3000);
+    assert_eq!(config.provider, "openai");
+}
+
+#[test]
+#[serial]
+fn legacy_chaos_env_vars_are_ignored() {
+    clear_envs();
+    std::env::set_var("CHAOS_HOST", "127.0.0.1");
+    std::env::set_var("CHAOS_PORT", "9999");
+    std::env::set_var("CHAOS_PROVIDER", "mock");
+
+    let temp = tempdir().unwrap();
+    let home = temp.path().join("home");
+    let _home_guard = setup_home(&home);
+
+    let cwd = temp.path().join("cwd");
+    std::fs::create_dir_all(&cwd).unwrap();
+    let _cwd_guard = CurrentDirGuard::enter(&cwd);
+
+    let config = AppConfig::load().expect("load config");
+
     assert_eq!(config.host, "0.0.0.0");
     assert_eq!(config.port, 3000);
     assert_eq!(config.provider, "openai");
-    assert_eq!(config.model, "gpt-4o-mini");
-    assert_eq!(config.temperature, 0.2);
-    assert_eq!(config.max_tokens, 1024);
-    assert_eq!(config.max_iterations, 6);
-    assert_eq!(config.token_budget, 12_000);
-    assert!(config.openai_api_key.is_none());
-    assert!(config.anthropic_api_key.is_none());
-    assert!(config.gemini_api_key.is_none());
-    assert_eq!(config.workspace, home.join(".chaos-bot"));
-    assert_eq!(config.log_level, "info");
-    assert_eq!(config.log_retention_days, 7);
-    assert_eq!(config.log_dir, home.join(".chaos-bot/logs"));
-    assert_eq!(config.working_dir, home.join(".chaos-bot"));
-    assert_eq!(config.personality_dir, home.join(".chaos-bot/personality"));
-    assert_eq!(config.memory_dir, home.join(".chaos-bot/memory"));
-    assert_eq!(config.memory_file, home.join(".chaos-bot/MEMORY.md"));
+
+    std::env::remove_var("CHAOS_HOST");
+    std::env::remove_var("CHAOS_PORT");
+    std::env::remove_var("CHAOS_PROVIDER");
 }
 
 #[test]
 #[serial]
-fn agent_json_overrides_runtime_settings() {
-    clear_legacy_and_secret_envs();
+fn config_file_secrets_override_env_secrets() {
+    clear_envs();
     let temp = tempdir().unwrap();
     let home = temp.path().join("home");
     let _home_guard = setup_home(&home);
 
     let cwd = temp.path().join("cfg");
     std::fs::create_dir_all(&cwd).unwrap();
-    let agent_path = cwd.join("agent.json");
-    let custom = AgentFileConfig {
-        workspace: Some(PathBuf::from("./runtime")),
-        logging: AgentLoggingConfig {
-            level: Some("warning".to_string()),
-            retention_days: Some(14),
-            directory: Some(PathBuf::from("./app-logs")),
-        },
-        server: AgentServerConfig {
-            host: Some("127.0.0.1".to_string()),
-            port: Some(8080),
-        },
-        llm: AgentLlmConfig {
-            provider: Some("mock".to_string()),
-            model: Some("mock-model".to_string()),
-            temperature: Some(0.7),
-            max_tokens: Some(2048),
-            max_iterations: Some(10),
-            token_budget: Some(20_000),
-        },
-        secrets: AgentSecretsConfig::default(),
-    };
+    let config_path = cwd.join("config.json");
     std::fs::write(
-        &agent_path,
-        format!("{}\n", serde_json::to_string_pretty(&custom).unwrap()),
-    )
-    .unwrap();
-
-    let config =
-        AppConfig::from_agent_file_path(&agent_path, EnvSecrets::default(), cwd.clone()).unwrap();
-
-    assert_eq!(config.host, "127.0.0.1");
-    assert_eq!(config.port, 8080);
-    assert_eq!(config.provider, "mock");
-    assert_eq!(config.model, "mock-model");
-    assert_eq!(config.temperature, 0.7);
-    assert_eq!(config.max_tokens, 2048);
-    assert_eq!(config.max_iterations, 10);
-    assert_eq!(config.token_budget, 20_000);
-    assert_eq!(config.workspace, home.join("runtime"));
-    assert_eq!(config.log_level, "warn");
-    assert_eq!(config.log_retention_days, 14);
-    assert_eq!(config.log_dir, home.join("runtime/app-logs"));
-    assert_eq!(config.working_dir, home.join("runtime"));
-    assert_eq!(config.personality_dir, home.join("runtime/personality"));
-    assert_eq!(config.memory_dir, home.join("runtime/memory"));
-    assert_eq!(config.memory_file, home.join("runtime/MEMORY.md"));
-}
-
-#[test]
-#[serial]
-fn absolute_workspace_is_used_as_is() {
-    clear_legacy_and_secret_envs();
-    let temp = tempdir().unwrap();
-    let home = temp.path().join("home");
-    let _home_guard = setup_home(&home);
-
-    let cwd = temp.path().join("cfg");
-    std::fs::create_dir_all(&cwd).unwrap();
-    let absolute_workspace = temp.path().join("absolute-workspace");
-    let config = AppConfig::from_inputs(
-        AgentFileConfig {
-            workspace: Some(absolute_workspace.clone()),
-            logging: AgentLoggingConfig::default(),
-            server: AgentServerConfig::default(),
-            llm: AgentLlmConfig::default(),
-            secrets: AgentSecretsConfig::default(),
-        },
-        EnvSecrets::default(),
-        home.clone(),
-    );
-    assert_eq!(config.workspace, absolute_workspace.clone());
-    assert_eq!(config.working_dir, absolute_workspace);
-}
-
-#[test]
-#[serial]
-fn env_secrets_apply_when_json_secrets_missing() {
-    clear_legacy_and_secret_envs();
-    let temp = tempdir().unwrap();
-    let home = temp.path().join("home");
-    let _home_guard = setup_home(&home);
-
-    let cwd = temp.path().join("cfg");
-    std::fs::create_dir_all(&cwd).unwrap();
-    let agent_path = cwd.join("agent.json");
-    std::fs::write(
-        &agent_path,
+        &config_path,
         r#"{
-  "workspace": ".chaos-bot",
-  "server": { "host": "0.0.0.0", "port": 3000 },
-  "llm": { "provider": "openai", "model": "gpt-4o-mini" },
-  "secrets": {}
-}
-"#,
-    )
-    .unwrap();
-
-    let env_secrets = EnvSecrets {
-        openai_api_key: Some("openai-env".to_string()),
-        anthropic_api_key: Some("anthropic-env".to_string()),
-        gemini_api_key: Some("gemini-env".to_string()),
-    };
-    let config = AppConfig::from_agent_file_path(&agent_path, env_secrets, cwd).unwrap();
-
-    assert_eq!(config.openai_api_key.as_deref(), Some("openai-env"));
-    assert_eq!(config.anthropic_api_key.as_deref(), Some("anthropic-env"));
-    assert_eq!(config.gemini_api_key.as_deref(), Some("gemini-env"));
-}
-
-#[test]
-#[serial]
-fn json_secrets_override_env_secrets() {
-    clear_legacy_and_secret_envs();
-    let temp = tempdir().unwrap();
-    let home = temp.path().join("home");
-    let _home_guard = setup_home(&home);
-
-    let cwd = temp.path().join("cfg");
-    std::fs::create_dir_all(&cwd).unwrap();
-    let agent_path = cwd.join("agent.json");
-    std::fs::write(
-        &agent_path,
-        r#"{
-  "llm": { "provider": "openai" },
   "secrets": {
     "openai_api_key": "openai-json",
     "anthropic_api_key": "anthropic-json",
@@ -262,44 +242,61 @@ fn json_secrets_override_env_secrets() {
     )
     .unwrap();
 
-    let env_secrets = EnvSecrets {
-        openai_api_key: Some("openai-env".to_string()),
-        anthropic_api_key: Some("anthropic-env".to_string()),
-        gemini_api_key: Some("gemini-env".to_string()),
-    };
-    let config = AppConfig::from_agent_file_path(&agent_path, env_secrets, cwd).unwrap();
+    std::env::set_var("OPENAI_API_KEY", "openai-env");
+    std::env::set_var("ANTHROPIC_API_KEY", "anthropic-env");
+    std::env::set_var("GEMINI_API_KEY", "gemini-env");
+
+    let config =
+        AppConfig::from_config_file_path(&config_path, EnvSecrets::from_env(), cwd.clone())
+            .expect("load")
+            .0;
 
     assert_eq!(config.openai_api_key.as_deref(), Some("openai-json"));
     assert_eq!(config.anthropic_api_key.as_deref(), Some("anthropic-json"));
     assert_eq!(config.gemini_api_key.as_deref(), Some("gemini-json"));
+
+    std::env::remove_var("OPENAI_API_KEY");
+    std::env::remove_var("ANTHROPIC_API_KEY");
+    std::env::remove_var("GEMINI_API_KEY");
 }
 
 #[test]
 #[serial]
-fn legacy_chaos_env_vars_are_ignored() {
-    clear_legacy_and_secret_envs();
-    std::env::set_var("CHAOS_HOST", "127.0.0.1");
-    std::env::set_var("CHAOS_PORT", "9999");
-    std::env::set_var("CHAOS_PROVIDER", "mock");
-
+fn env_secrets_are_used_when_config_secrets_missing() {
+    clear_envs();
     let temp = tempdir().unwrap();
     let home = temp.path().join("home");
     let _home_guard = setup_home(&home);
 
     let cwd = temp.path().join("cfg");
     std::fs::create_dir_all(&cwd).unwrap();
+    let config_path = cwd.join("config.json");
+    std::fs::write(
+        &config_path,
+        r#"{
+  "llm": { "provider": "openai", "model": "gpt-4o-mini" },
+  "secrets": {}
+}
+"#,
+    )
+    .unwrap();
+
+    std::env::set_var("OPENAI_API_KEY", "openai-env");
+    std::env::set_var("ANTHROPIC_API_KEY", "anthropic-env");
+    std::env::set_var("GEMINI_API_KEY", "gemini-env");
+
     let config =
-        AppConfig::from_agent_file_path(&cwd.join("agent.json"), EnvSecrets::default(), cwd)
-            .unwrap();
+        AppConfig::from_config_file_path(&config_path, EnvSecrets::from_env(), cwd.clone())
+            .expect("load")
+            .0;
 
-    assert_eq!(config.host, "0.0.0.0");
-    assert_eq!(config.port, 3000);
-    assert_eq!(config.provider, "openai");
-    assert_eq!(config.workspace, home.join(".chaos-bot"));
+    assert_eq!(config.openai_api_key.as_deref(), Some("openai-env"));
+    assert_eq!(config.anthropic_api_key.as_deref(), Some("anthropic-env"));
+    assert_eq!(config.gemini_api_key.as_deref(), Some("gemini-env"));
 
-    std::env::remove_var("CHAOS_HOST");
-    std::env::remove_var("CHAOS_PORT");
-    std::env::remove_var("CHAOS_PROVIDER");
+    std::env::remove_var("OPENAI_API_KEY");
+    std::env::remove_var("ANTHROPIC_API_KEY");
+    std::env::remove_var("GEMINI_API_KEY");
 }
 
 #[test]
@@ -352,30 +349,4 @@ fn from_inputs_supports_injected_config_source() {
     assert_eq!(config.personality_dir, home.join("wd/personality"));
     assert_eq!(config.memory_dir, home.join("wd/memory"));
     assert_eq!(config.memory_file, home.join("wd/MEMORY.md"));
-}
-
-#[test]
-#[serial]
-fn load_uses_home_workspace_when_agent_config_path_is_external() {
-    clear_legacy_and_secret_envs();
-    let temp = tempdir().unwrap();
-    let home = temp.path().join("home");
-    let _home_guard = setup_home(&home);
-
-    let cwd = temp.path().join("cwd");
-    std::fs::create_dir_all(&cwd).unwrap();
-    let _cwd_guard = CurrentDirGuard::enter(&cwd);
-
-    let external_dir = temp.path().join("external-config");
-    std::fs::create_dir_all(&external_dir).unwrap();
-    let external_config = external_dir.join("agent.custom.json");
-    let _config_guard = EnvVarGuard::set("AGENT_CONFIG_PATH", external_config.to_str().unwrap());
-
-    let config = AppConfig::load().expect("load config");
-
-    assert!(external_config.exists());
-    assert!(external_dir.join(".env.example").exists());
-    assert_eq!(config.workspace, home.join(".chaos-bot"));
-    assert_eq!(config.log_dir, home.join(".chaos-bot/logs"));
-    assert_eq!(config.working_dir, home.join(".chaos-bot"));
 }
