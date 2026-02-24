@@ -1,0 +1,7 @@
+{
+  "name": "chaos-bot-tauri-bridge",
+  "private": true,
+  "scripts": {
+    "tauri": "npm --prefix ../frontend-react exec -- tauri"
+  }
+}

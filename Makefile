@@ -1,4 +1,7 @@
 .PHONY: clean-runtime build run \
+	frontend-install frontend-dev frontend-build \
+	tauri-preflight tauri-dev tauri-build-desktop \
+	tauri-android-init tauri-android-dev tauri-android-build tauri-ios-dev \
 	test test-unit test-integration test-e2e test-all \
 	coverage coverage-report coverage-check
 
@@ -10,6 +13,36 @@ build:
 
 run:
 	cargo run -p chaos-bot-backend
+
+frontend-install:
+	npm --prefix frontend-react install
+
+frontend-dev:
+	npm --prefix frontend-react run dev
+
+frontend-build:
+	npm --prefix frontend-react run build
+
+tauri-dev:
+	npm --prefix frontend-react exec -- tauri dev --config src-tauri/tauri.conf.json
+
+tauri-preflight:
+	npm --prefix frontend-react exec -- tauri info
+
+tauri-build-desktop:
+	npm --prefix frontend-react exec -- tauri build --config src-tauri/tauri.conf.json --debug --no-bundle
+
+tauri-android-init:
+	npm --prefix frontend-react exec -- tauri android init --config src-tauri/tauri.conf.json --ci
+
+tauri-android-dev:
+	npm --prefix frontend-react exec -- tauri android dev --config src-tauri/tauri.conf.json
+
+tauri-android-build:
+	npm --prefix frontend-react exec -- tauri android build --config src-tauri/tauri.conf.json --debug --apk --ci
+
+tauri-ios-dev:
+	npm --prefix frontend-react exec -- tauri ios dev --config src-tauri/tauri.conf.json
 
 test: test-unit test-integration
 

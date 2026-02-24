@@ -5,6 +5,9 @@
 .DS_Store
 node_modules
 frontend/.cache
+frontend-react/dist
+src-tauri/target
+src-tauri/gen
 
 # Runtime-generated directories and files (anchored to repo root)
 /agent.json

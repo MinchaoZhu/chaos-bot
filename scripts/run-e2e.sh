@@ -13,4 +13,5 @@ export E2E_ARTIFACTS_DIR
 
 cd "${ROOT_DIR}/e2e"
 test -d node_modules/@playwright/test || npm install
+test -d "${ROOT_DIR}/frontend-react/node_modules/react" || npm --prefix "${ROOT_DIR}/frontend-react" install
 npx playwright test
