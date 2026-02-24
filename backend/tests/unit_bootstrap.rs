@@ -10,6 +10,8 @@ fn make_config(root: PathBuf, personality_dir: PathBuf) -> AppConfig {
         provider: "mock".to_string(),
         model: "mock-model".to_string(),
         openai_api_key: None,
+        anthropic_api_key: None,
+        gemini_api_key: None,
         temperature: 0.2,
         max_tokens: 256,
         max_iterations: 3,
@@ -41,7 +43,7 @@ async fn bootstrap_creates_default_personality_and_sessions_dir() {
 }
 
 #[tokio::test]
-async fn bootstrap_does_not_overwrite_existing_personality_dir() {
+async fn bootstrap_preserves_existing_files_and_fills_missing_defaults() {
     let tmp = tempdir().unwrap();
     let root = tmp.path().to_path_buf();
     let personality_dir = root.join("personality");
@@ -55,6 +57,8 @@ async fn bootstrap_does_not_overwrite_existing_personality_dir() {
     let soul_content = tokio::fs::read_to_string(soul).await.unwrap();
     assert_eq!(soul_content, "custom soul");
 
-    assert!(!personality_dir.join("IDENTITY.md").exists());
+    assert!(personality_dir.join("IDENTITY.md").exists());
+    assert!(personality_dir.join("USER.md").exists());
+    assert!(personality_dir.join("AGENTS.md").exists());
     assert!(root.join("data/sessions").exists());
 }

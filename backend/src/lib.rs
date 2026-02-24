@@ -5,6 +5,7 @@ pub mod config;
 pub mod llm;
 pub mod memory;
 pub mod personality;
+pub mod runtime_assets;
 pub mod sessions;
 pub mod tools;
 pub mod types;

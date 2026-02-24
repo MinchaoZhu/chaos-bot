@@ -65,7 +65,10 @@ async fn append_daily_log_appends() {
 async fn search_finds_matching_lines() {
     let (_temp, store) = make_store();
     store.ensure_layout().await.unwrap();
-    store.write_curated("hello world\ngoodbye world\n").await.unwrap();
+    store
+        .write_curated("hello world\ngoodbye world\n")
+        .await
+        .unwrap();
     let hits = store.search("hello").await.unwrap();
     assert_eq!(hits.len(), 1);
     assert!(hits[0].snippet.contains("hello"));
@@ -101,8 +104,14 @@ async fn search_whitespace_keyword_returns_empty() {
 async fn search_across_daily_logs_and_curated() {
     let (_temp, store) = make_store();
     store.ensure_layout().await.unwrap();
-    store.write_curated("topic: Rust programming\n").await.unwrap();
-    store.append_daily_log("discussed topic today").await.unwrap();
+    store
+        .write_curated("topic: Rust programming\n")
+        .await
+        .unwrap();
+    store
+        .append_daily_log("discussed topic today")
+        .await
+        .unwrap();
     let hits = store.search("topic").await.unwrap();
     assert!(hits.len() >= 2);
 }
@@ -120,7 +129,10 @@ async fn get_file_curated() {
 async fn get_file_with_line_range() {
     let (_temp, store) = make_store();
     store.ensure_layout().await.unwrap();
-    store.write_curated("line1\nline2\nline3\nline4\n").await.unwrap();
+    store
+        .write_curated("line1\nline2\nline3\nline4\n")
+        .await
+        .unwrap();
     let content = store.get_file("MEMORY.md", Some(2), Some(3)).await.unwrap();
     assert!(content.contains("line2"));
     assert!(content.contains("line3"));
@@ -151,7 +163,10 @@ async fn get_file_out_of_range_returns_empty() {
     let (_temp, store) = make_store();
     store.ensure_layout().await.unwrap();
     store.write_curated("line1\n").await.unwrap();
-    let content = store.get_file("MEMORY.md", Some(100), Some(200)).await.unwrap();
+    let content = store
+        .get_file("MEMORY.md", Some(100), Some(200))
+        .await
+        .unwrap();
     assert!(content.is_empty());
 }
 

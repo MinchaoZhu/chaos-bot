@@ -6,8 +6,10 @@ use tempfile::tempdir;
 
 fn make_context() -> (tempfile::TempDir, ToolContext) {
     let temp = tempdir().unwrap();
-    let memory: Arc<dyn MemoryBackend> =
-        Arc::new(MemoryStore::new(temp.path().join("memory"), temp.path().join("MEMORY.md")));
+    let memory: Arc<dyn MemoryBackend> = Arc::new(MemoryStore::new(
+        temp.path().join("memory"),
+        temp.path().join("MEMORY.md"),
+    ));
     let ctx = ToolContext::new(temp.path().to_path_buf(), memory);
     (temp, ctx)
 }
@@ -136,7 +138,10 @@ async fn read_tool_reads_file() {
     std::fs::write(ctx.root_dir.join("test.txt"), "hello\nworld").unwrap();
 
     let tool = ReadTool;
-    let result = tool.execute(json!({"path": "test.txt"}), &ctx).await.unwrap();
+    let result = tool
+        .execute(json!({"path": "test.txt"}), &ctx)
+        .await
+        .unwrap();
     assert_eq!(result.output, "hello\nworld");
     assert!(!result.is_error);
 }
@@ -148,7 +153,10 @@ async fn read_tool_with_line_range() {
 
     let tool = ReadTool;
     let result = tool
-        .execute(json!({"path": "test.txt", "start_line": 2, "end_line": 3}), &ctx)
+        .execute(
+            json!({"path": "test.txt", "start_line": 2, "end_line": 3}),
+            &ctx,
+        )
         .await
         .unwrap();
     assert_eq!(result.output, "b\nc");
@@ -208,12 +216,9 @@ async fn write_tool_append_mode() {
 async fn write_tool_creates_parent_dirs() {
     let (_temp, ctx) = make_context();
     let tool = WriteTool;
-    tool.execute(
-        json!({"path": "sub/dir/file.txt", "content": "deep"}),
-        &ctx,
-    )
-    .await
-    .unwrap();
+    tool.execute(json!({"path": "sub/dir/file.txt", "content": "deep"}), &ctx)
+        .await
+        .unwrap();
 
     let content = std::fs::read_to_string(ctx.root_dir.join("sub/dir/file.txt")).unwrap();
     assert_eq!(content, "deep");
@@ -288,7 +293,9 @@ async fn bash_tool_pwd_runs_in_root_dir() {
     let result = tool.execute(json!({"command": "pwd"}), &ctx).await.unwrap();
     // The output should contain the temp dir path
     let canonical_root = std::fs::canonicalize(&ctx.root_dir).unwrap();
-    assert!(result.output.contains(&canonical_root.to_string_lossy().to_string()));
+    assert!(result
+        .output
+        .contains(&canonical_root.to_string_lossy().to_string()));
 }
 
 // -------------------------------------------------------------------------
@@ -301,10 +308,7 @@ async fn grep_tool_finds_matches() {
     std::fs::write(ctx.root_dir.join("file.txt"), "foo\nbar\nbaz foo").unwrap();
 
     let tool = GrepTool;
-    let result = tool
-        .execute(json!({"pattern": "foo"}), &ctx)
-        .await
-        .unwrap();
+    let result = tool.execute(json!({"pattern": "foo"}), &ctx).await.unwrap();
     // Should find 2 matches
     let lines: Vec<&str> = result.output.lines().collect();
     assert_eq!(lines.len(), 2);
@@ -316,10 +320,7 @@ async fn grep_tool_case_insensitive() {
     std::fs::write(ctx.root_dir.join("file.txt"), "FOO\nfoo").unwrap();
 
     let tool = GrepTool;
-    let result = tool
-        .execute(json!({"pattern": "foo"}), &ctx)
-        .await
-        .unwrap();
+    let result = tool.execute(json!({"pattern": "foo"}), &ctx).await.unwrap();
     let lines: Vec<&str> = result.output.lines().collect();
     assert_eq!(lines.len(), 2);
 }
@@ -335,10 +336,7 @@ async fn find_tool_finds_files() {
     std::fs::write(ctx.root_dir.join("test.txt"), "").unwrap();
 
     let tool = FindTool;
-    let result = tool
-        .execute(json!({"pattern": ".rs"}), &ctx)
-        .await
-        .unwrap();
+    let result = tool.execute(json!({"pattern": ".rs"}), &ctx).await.unwrap();
     assert!(result.output.contains("test.rs"));
 }
 

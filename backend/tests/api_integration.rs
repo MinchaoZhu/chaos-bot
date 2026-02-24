@@ -51,7 +51,13 @@ async fn session_crud_lifecycle() {
     // Create
     let res = app
         .clone()
-        .oneshot(Request::builder().method("POST").uri("/api/sessions").body(Body::empty()).unwrap())
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/api/sessions")
+                .body(Body::empty())
+                .unwrap(),
+        )
         .await
         .unwrap();
     assert_eq!(res.status(), StatusCode::OK);
@@ -62,7 +68,13 @@ async fn session_crud_lifecycle() {
     // Get
     let res = app
         .clone()
-        .oneshot(Request::builder().method("GET").uri(format!("/api/sessions/{sid}")).body(Body::empty()).unwrap())
+        .oneshot(
+            Request::builder()
+                .method("GET")
+                .uri(format!("/api/sessions/{sid}"))
+                .body(Body::empty())
+                .unwrap(),
+        )
         .await
         .unwrap();
     assert_eq!(res.status(), StatusCode::OK);
@@ -70,7 +82,13 @@ async fn session_crud_lifecycle() {
     // List
     let res = app
         .clone()
-        .oneshot(Request::builder().method("GET").uri("/api/sessions").body(Body::empty()).unwrap())
+        .oneshot(
+            Request::builder()
+                .method("GET")
+                .uri("/api/sessions")
+                .body(Body::empty())
+                .unwrap(),
+        )
         .await
         .unwrap();
     assert_eq!(res.status(), StatusCode::OK);
@@ -81,14 +99,26 @@ async fn session_crud_lifecycle() {
     // Delete
     let res = app
         .clone()
-        .oneshot(Request::builder().method("DELETE").uri(format!("/api/sessions/{sid}")).body(Body::empty()).unwrap())
+        .oneshot(
+            Request::builder()
+                .method("DELETE")
+                .uri(format!("/api/sessions/{sid}"))
+                .body(Body::empty())
+                .unwrap(),
+        )
         .await
         .unwrap();
     assert_eq!(res.status(), StatusCode::NO_CONTENT);
 
     // Get after delete → 404
     let res = app
-        .oneshot(Request::builder().method("GET").uri(format!("/api/sessions/{sid}")).body(Body::empty()).unwrap())
+        .oneshot(
+            Request::builder()
+                .method("GET")
+                .uri(format!("/api/sessions/{sid}"))
+                .body(Body::empty())
+                .unwrap(),
+        )
         .await
         .unwrap();
     assert_eq!(res.status(), StatusCode::NOT_FOUND);
@@ -202,13 +232,33 @@ async fn chat_with_existing_session_accumulates() {
     let provider = MockStreamProvider::new(vec![
         // First chat
         vec![
-            LlmStreamEvent { delta: "first reply".into(), tool_call: None, done: false, usage: None },
-            LlmStreamEvent { delta: String::new(), tool_call: None, done: true, usage: None },
+            LlmStreamEvent {
+                delta: "first reply".into(),
+                tool_call: None,
+                done: false,
+                usage: None,
+            },
+            LlmStreamEvent {
+                delta: String::new(),
+                tool_call: None,
+                done: true,
+                usage: None,
+            },
         ],
         // Second chat
         vec![
-            LlmStreamEvent { delta: "second reply".into(), tool_call: None, done: false, usage: None },
-            LlmStreamEvent { delta: String::new(), tool_call: None, done: true, usage: None },
+            LlmStreamEvent {
+                delta: "second reply".into(),
+                tool_call: None,
+                done: false,
+                usage: None,
+            },
+            LlmStreamEvent {
+                delta: String::new(),
+                tool_call: None,
+                done: true,
+                usage: None,
+            },
         ],
     ]);
 
@@ -218,7 +268,13 @@ async fn chat_with_existing_session_accumulates() {
     // Create session
     let res = app
         .clone()
-        .oneshot(Request::builder().method("POST").uri("/api/sessions").body(Body::empty()).unwrap())
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/api/sessions")
+                .body(Body::empty())
+                .unwrap(),
+        )
         .await
         .unwrap();
     let body = to_bytes(res.into_body(), usize::MAX).await.unwrap();
@@ -322,7 +378,13 @@ async fn serves_index_html() {
     let app = router(state);
 
     let res = app
-        .oneshot(Request::builder().method("GET").uri("/").body(Body::empty()).unwrap())
+        .oneshot(
+            Request::builder()
+                .method("GET")
+                .uri("/")
+                .body(Body::empty())
+                .unwrap(),
+        )
         .await
         .unwrap();
 
@@ -340,7 +402,13 @@ async fn serves_app_js() {
     let app = router(state);
 
     let res = app
-        .oneshot(Request::builder().method("GET").uri("/app.js").body(Body::empty()).unwrap())
+        .oneshot(
+            Request::builder()
+                .method("GET")
+                .uri("/app.js")
+                .body(Body::empty())
+                .unwrap(),
+        )
         .await
         .unwrap();
 
@@ -356,7 +424,13 @@ async fn serves_style_css() {
     let app = router(state);
 
     let res = app
-        .oneshot(Request::builder().method("GET").uri("/style.css").body(Body::empty()).unwrap())
+        .oneshot(
+            Request::builder()
+                .method("GET")
+                .uri("/style.css")
+                .body(Body::empty())
+                .unwrap(),
+        )
         .await
         .unwrap();
 

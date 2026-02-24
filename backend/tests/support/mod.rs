@@ -1,6 +1,8 @@
 //! Shared test fixtures and mocks for integration/unit tests.
 #![allow(dead_code)]
 
+use anyhow::Result;
+use async_trait::async_trait;
 use chaos_bot_backend::agent::{AgentConfig, AgentLoop};
 use chaos_bot_backend::api::AppState;
 use chaos_bot_backend::llm::{LlmProvider, LlmRequest, LlmResponse, LlmStream, LlmStreamEvent};
@@ -9,8 +11,6 @@ use chaos_bot_backend::personality::{PersonalityLoader, PersonalitySource};
 use chaos_bot_backend::sessions::SessionStore;
 use chaos_bot_backend::tools::{Tool, ToolContext, ToolRegistry};
 use chaos_bot_backend::types::{Message, ToolCall, ToolExecution, ToolSpec, Usage};
-use anyhow::Result;
-use async_trait::async_trait;
 use futures::stream;
 use serde_json::{json, Value};
 use std::path::PathBuf;
@@ -146,7 +146,9 @@ pub struct ErrorProvider {
 
 impl ErrorProvider {
     pub fn new(msg: &str) -> Self {
-        Self { message: msg.to_string() }
+        Self {
+            message: msg.to_string(),
+        }
     }
 }
 

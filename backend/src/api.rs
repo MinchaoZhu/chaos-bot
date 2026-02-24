@@ -136,9 +136,11 @@ async fn chat(
             }
         };
 
-        send_event(Event::default().event("session").data(
-            json!({"session_id": session_id.clone()}).to_string(),
-        ));
+        send_event(
+            Event::default()
+                .event("session")
+                .data(json!({"session_id": session_id.clone()}).to_string()),
+        );
 
         let result = state
             .agent
@@ -154,19 +156,23 @@ async fn chat(
 
         match result {
             Ok(output) => {
-                send_event(Event::default().event("done").data(
-                    json!({
-                        "session_id": session_id,
-                        "usage": output.usage,
-                        "finish_reason": output.finish_reason,
-                    })
-                    .to_string(),
-                ));
+                send_event(
+                    Event::default().event("done").data(
+                        json!({
+                            "session_id": session_id,
+                            "usage": output.usage,
+                            "finish_reason": output.finish_reason,
+                        })
+                        .to_string(),
+                    ),
+                );
             }
             Err(error) => {
-                send_event(Event::default().event("error").data(
-                    json!({"message": error.to_string()}).to_string(),
-                ));
+                send_event(
+                    Event::default()
+                        .event("error")
+                        .data(json!({"message": error.to_string()}).to_string()),
+                );
             }
         }
 

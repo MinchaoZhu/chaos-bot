@@ -7,6 +7,8 @@ use tokio::fs;
 use tokio::io::AsyncWriteExt;
 use walkdir::WalkDir;
 
+use crate::runtime_assets::DEFAULT_MEMORY_MD;
+
 #[derive(Clone, Debug)]
 pub struct MemoryStore {
     memory_dir: PathBuf,
@@ -56,7 +58,7 @@ impl MemoryStore {
             fs::create_dir_all(&self.memory_dir).await?;
         }
         if !self.curated_file.exists() {
-            fs::write(&self.curated_file, "# Long-Term Memory\n").await?;
+            fs::write(&self.curated_file, DEFAULT_MEMORY_MD).await?;
         }
         Ok(())
     }

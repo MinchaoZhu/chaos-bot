@@ -12,7 +12,8 @@ use std::sync::Arc;
 
 pub type LlmStream = Pin<Box<dyn Stream<Item = Result<LlmStreamEvent>> + Send>>;
 
-pub type ByteStream = Pin<Box<dyn Stream<Item = std::result::Result<bytes::Bytes, reqwest::Error>> + Send>>;
+pub type ByteStream =
+    Pin<Box<dyn Stream<Item = std::result::Result<bytes::Bytes, reqwest::Error>> + Send>>;
 
 #[derive(Clone, Debug)]
 pub struct LlmRequest {
@@ -52,18 +53,30 @@ pub fn build_provider(config: &AppConfig) -> Result<Arc<dyn LlmProvider>> {
             let api_key = config
                 .openai_api_key
                 .clone()
-                .ok_or_else(|| anyhow!("OPENAI_API_KEY is required when CHAOS_PROVIDER=openai"))?;
+                .ok_or_else(|| anyhow!("openai_api_key is required (set OPENAI_API_KEY or agent.json secrets.openai_api_key)"))?;
             Ok(Arc::new(OpenAiProvider::new(api_key)))
         }
-        "anthropic" => Ok(Arc::new(AnthropicProvider)),
-        "gemini" => Ok(Arc::new(GeminiProvider)),
+        "anthropic" => {
+            config
+                .anthropic_api_key
+                .as_ref()
+                .ok_or_else(|| anyhow!("anthropic_api_key is required (set ANTHROPIC_API_KEY or agent.json secrets.anthropic_api_key)"))?;
+            Ok(Arc::new(AnthropicProvider))
+        }
+        "gemini" => {
+            config
+                .gemini_api_key
+                .as_ref()
+                .ok_or_else(|| anyhow!("gemini_api_key is required (set GEMINI_API_KEY or agent.json secrets.gemini_api_key)"))?;
+            Ok(Arc::new(GeminiProvider))
+        }
         "mock" => Ok(Arc::new(MockProvider)),
         other => Err(anyhow!("unsupported provider: {other}")),
     }
 }
 
 /// Built-in mock provider for testing without API keys.
-/// Activated via `CHAOS_PROVIDER=mock`. Returns canned responses and
+/// Activated via `agent.json` (`llm.provider = "mock"`). Returns canned responses and
 /// optionally simulates tool calls when the input contains "use_tool:".
 pub struct MockProvider;
 
@@ -91,7 +104,11 @@ impl LlmProvider for MockProvider {
                     name: tool_name.to_string(),
                     arguments: json!({}),
                 }],
-                usage: Some(Usage { prompt_tokens: 10, completion_tokens: 5, total_tokens: 15 }),
+                usage: Some(Usage {
+                    prompt_tokens: 10,
+                    completion_tokens: 5,
+                    total_tokens: 15,
+                }),
                 finish_reason: Some("tool_calls".to_string()),
             });
         }
@@ -99,7 +116,11 @@ impl LlmProvider for MockProvider {
         Ok(LlmResponse {
             message: Message::assistant(format!("Mock response to: {}", user_content)),
             tool_calls: vec![],
-            usage: Some(Usage { prompt_tokens: 10, completion_tokens: 20, total_tokens: 30 }),
+            usage: Some(Usage {
+                prompt_tokens: 10,
+                completion_tokens: 20,
+                total_tokens: 30,
+            }),
             finish_reason: Some("stop".to_string()),
         })
     }
@@ -130,7 +151,11 @@ impl LlmProvider for MockProvider {
                     delta: String::new(),
                     tool_call: None,
                     done: true,
-                    usage: Some(Usage { prompt_tokens: 10, completion_tokens: 5, total_tokens: 15 }),
+                    usage: Some(Usage {
+                        prompt_tokens: 10,
+                        completion_tokens: 5,
+                        total_tokens: 15,
+                    }),
                 }),
             ])));
         }
@@ -159,7 +184,11 @@ impl LlmProvider for MockProvider {
             delta: String::new(),
             tool_call: None,
             done: true,
-            usage: Some(Usage { prompt_tokens: 10, completion_tokens: 20, total_tokens: 30 }),
+            usage: Some(Usage {
+                prompt_tokens: 10,
+                completion_tokens: 20,
+                total_tokens: 30,
+            }),
         }));
 
         Ok(Box::pin(stream::iter(events)))
@@ -310,8 +339,8 @@ impl OpenAiProvider {
                 .remove(&index)
                 .unwrap_or_else(|| "unknown".to_string());
 
-            let arguments = serde_json::from_str(&args_raw)
-                .unwrap_or_else(|_| json!({"raw": args_raw}));
+            let arguments =
+                serde_json::from_str(&args_raw).unwrap_or_else(|_| json!({"raw": args_raw}));
             state.pending.push_back(Ok(LlmStreamEvent {
                 delta: String::new(),
                 tool_call: Some(ToolCall {
@@ -368,7 +397,10 @@ impl OpenAiProvider {
 
         if let Some(calls) = delta.get("tool_calls").and_then(|value| value.as_array()) {
             for call in calls {
-                let index = call.get("index").and_then(|value| value.as_u64()).unwrap_or(0);
+                let index = call
+                    .get("index")
+                    .and_then(|value| value.as_u64())
+                    .unwrap_or(0);
 
                 if let Some(id) = call.get("id").and_then(|value| value.as_str()) {
                     state.tool_ids.insert(index, id.to_string());
@@ -423,7 +455,10 @@ impl LlmProvider for OpenAiProvider {
 
         let response = self
             .client
-            .post(format!("{}/chat/completions", self.base_url.trim_end_matches('/')))
+            .post(format!(
+                "{}/chat/completions",
+                self.base_url.trim_end_matches('/')
+            ))
             .bearer_auth(&self.api_key)
             .json(&payload)
             .send()
@@ -486,7 +521,10 @@ impl LlmProvider for OpenAiProvider {
 
         let response = self
             .client
-            .post(format!("{}/chat/completions", self.base_url.trim_end_matches('/')))
+            .post(format!(
+                "{}/chat/completions",
+                self.base_url.trim_end_matches('/')
+            ))
             .bearer_auth(&self.api_key)
             .json(&payload)
             .send()
@@ -527,7 +565,9 @@ impl LlmProvider for OpenAiProvider {
                         state.text_buffer.push_str(&chunk);
 
                         for payload in OpenAiProvider::drain_sse_payloads(&mut state.text_buffer) {
-                            if let Err(error) = OpenAiProvider::process_stream_payload(&mut state, &payload) {
+                            if let Err(error) =
+                                OpenAiProvider::process_stream_payload(&mut state, &payload)
+                            {
                                 state.done = true;
                                 state.pending.push_back(Err(error));
                                 break;

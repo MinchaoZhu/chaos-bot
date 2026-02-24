@@ -84,20 +84,14 @@ fn enforce_token_budget_removes_middle_messages() {
 
 #[test]
 fn enforce_token_budget_keeps_at_least_two() {
-    let mut messages = vec![
-        Message::system("sys"),
-        Message::user("usr"),
-    ];
+    let mut messages = vec![Message::system("sys"), Message::user("usr")];
     AgentLoop::enforce_token_budget(&mut messages, 1);
     assert_eq!(messages.len(), 2);
 }
 
 #[test]
 fn enforce_token_budget_no_removal_when_under() {
-    let mut messages = vec![
-        Message::system("sys"),
-        Message::user("usr"),
-    ];
+    let mut messages = vec![Message::system("sys"), Message::user("usr")];
     AgentLoop::enforce_token_budget(&mut messages, 100_000);
     assert_eq!(messages.len(), 2);
 }
@@ -118,8 +112,8 @@ fn estimate_tokens_basic() {
 #[test]
 fn estimate_tokens_multiple() {
     let messages = vec![
-        Message::system("a"),   // 1/4 + 8 = 8
-        Message::user("b"),     // 1/4 + 8 = 8
+        Message::system("a"), // 1/4 + 8 = 8
+        Message::user("b"),   // 1/4 + 8 = 8
     ];
     let estimate = AgentLoop::estimate_tokens(&messages);
     assert_eq!(estimate, 16);
@@ -162,7 +156,10 @@ async fn run_with_tool_calls_loops() {
     let (_temp, agent) = build_test_agent_with_registry(Arc::new(provider), registry);
 
     let mut session = SessionState::new("s1");
-    let output = agent.run(&mut session, "do something".to_string()).await.unwrap();
+    let output = agent
+        .run(&mut session, "do something".to_string())
+        .await
+        .unwrap();
 
     assert_eq!(output.assistant_message.content, "Done!");
     assert_eq!(output.finish_reason.as_deref(), Some("stop"));
@@ -228,28 +225,88 @@ async fn max_iterations_returns_fallback() {
 
     let provider = MockStreamProvider::new(vec![
         vec![
-            LlmStreamEvent { delta: String::new(), tool_call: Some(tool_call()), done: false, usage: None },
-            LlmStreamEvent { delta: String::new(), tool_call: None, done: true, usage: None },
+            LlmStreamEvent {
+                delta: String::new(),
+                tool_call: Some(tool_call()),
+                done: false,
+                usage: None,
+            },
+            LlmStreamEvent {
+                delta: String::new(),
+                tool_call: None,
+                done: true,
+                usage: None,
+            },
         ],
         vec![
-            LlmStreamEvent { delta: String::new(), tool_call: Some(tool_call()), done: false, usage: None },
-            LlmStreamEvent { delta: String::new(), tool_call: None, done: true, usage: None },
+            LlmStreamEvent {
+                delta: String::new(),
+                tool_call: Some(tool_call()),
+                done: false,
+                usage: None,
+            },
+            LlmStreamEvent {
+                delta: String::new(),
+                tool_call: None,
+                done: true,
+                usage: None,
+            },
         ],
         vec![
-            LlmStreamEvent { delta: String::new(), tool_call: Some(tool_call()), done: false, usage: None },
-            LlmStreamEvent { delta: String::new(), tool_call: None, done: true, usage: None },
+            LlmStreamEvent {
+                delta: String::new(),
+                tool_call: Some(tool_call()),
+                done: false,
+                usage: None,
+            },
+            LlmStreamEvent {
+                delta: String::new(),
+                tool_call: None,
+                done: true,
+                usage: None,
+            },
         ],
         vec![
-            LlmStreamEvent { delta: String::new(), tool_call: Some(tool_call()), done: false, usage: None },
-            LlmStreamEvent { delta: String::new(), tool_call: None, done: true, usage: None },
+            LlmStreamEvent {
+                delta: String::new(),
+                tool_call: Some(tool_call()),
+                done: false,
+                usage: None,
+            },
+            LlmStreamEvent {
+                delta: String::new(),
+                tool_call: None,
+                done: true,
+                usage: None,
+            },
         ],
         vec![
-            LlmStreamEvent { delta: String::new(), tool_call: Some(tool_call()), done: false, usage: None },
-            LlmStreamEvent { delta: String::new(), tool_call: None, done: true, usage: None },
+            LlmStreamEvent {
+                delta: String::new(),
+                tool_call: Some(tool_call()),
+                done: false,
+                usage: None,
+            },
+            LlmStreamEvent {
+                delta: String::new(),
+                tool_call: None,
+                done: true,
+                usage: None,
+            },
         ],
         vec![
-            LlmStreamEvent { delta: String::new(), tool_call: Some(tool_call()), done: false, usage: None },
-            LlmStreamEvent { delta: String::new(), tool_call: None, done: true, usage: None },
+            LlmStreamEvent {
+                delta: String::new(),
+                tool_call: Some(tool_call()),
+                done: false,
+                usage: None,
+            },
+            LlmStreamEvent {
+                delta: String::new(),
+                tool_call: None,
+                done: true,
+                usage: None,
+            },
         ],
     ]);
 
@@ -259,7 +316,10 @@ async fn max_iterations_returns_fallback() {
     let (_temp, agent) = build_test_agent_with_registry(Arc::new(provider), registry);
     let mut session = SessionState::new("s1");
 
-    let output = agent.run(&mut session, "loop forever".to_string()).await.unwrap();
+    let output = agent
+        .run(&mut session, "loop forever".to_string())
+        .await
+        .unwrap();
     assert!(output.assistant_message.content.contains("max iterations"));
 }
 

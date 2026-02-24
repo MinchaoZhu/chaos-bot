@@ -79,7 +79,11 @@ impl AgentLoop {
         }
     }
 
-    pub async fn run(&self, session: &mut SessionState, user_input: String) -> Result<AgentRunOutput> {
+    pub async fn run(
+        &self,
+        session: &mut SessionState,
+        user_input: String,
+    ) -> Result<AgentRunOutput> {
         self.run_stream(session, user_input, |_| {}).await
     }
 
@@ -151,7 +155,11 @@ impl AgentLoop {
                 let summary = format!(
                     "User: {} | Assistant: {}",
                     user_input,
-                    assistant_message.content.chars().take(160).collect::<String>()
+                    assistant_message
+                        .content
+                        .chars()
+                        .take(160)
+                        .collect::<String>()
                 );
                 let _ = self.memory.append_daily_log(&summary).await;
 
@@ -164,7 +172,8 @@ impl AgentLoop {
             }
 
             finish_reason = Some("tool_calls".to_string());
-            let tool_context = ToolContext::new(self.config.working_dir.clone(), self.memory.clone());
+            let tool_context =
+                ToolContext::new(self.config.working_dir.clone(), self.memory.clone());
 
             for call in tool_calls {
                 let result = match self
@@ -191,7 +200,8 @@ impl AgentLoop {
             }
         }
 
-        let assistant_message = Message::assistant("Agent reached max iterations without a final answer.");
+        let assistant_message =
+            Message::assistant("Agent reached max iterations without a final answer.");
         session.push_message(assistant_message.clone());
 
         Ok(AgentRunOutput {

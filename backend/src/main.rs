@@ -15,7 +15,7 @@ use tracing::info;
 async fn main() -> Result<()> {
     init_tracing();
 
-    let config = AppConfig::from_env()?;
+    let config = AppConfig::load()?;
     let state = build_app(&config).await?;
     let app = router(state);
 
@@ -34,8 +34,10 @@ pub async fn build_app(config: &AppConfig) -> Result<AppState> {
     bootstrap_runtime_dirs(config).await?;
     tokio::fs::create_dir_all(&config.memory_dir).await?;
 
-    let memory: Arc<dyn MemoryBackend> =
-        Arc::new(MemoryStore::new(config.memory_dir.clone(), config.memory_file.clone()));
+    let memory: Arc<dyn MemoryBackend> = Arc::new(MemoryStore::new(
+        config.memory_dir.clone(),
+        config.memory_file.clone(),
+    ));
     memory.ensure_layout().await?;
 
     let personality: Arc<dyn PersonalitySource> =

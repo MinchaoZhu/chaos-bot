@@ -221,8 +221,14 @@ impl Tool for ReadTool {
             .get("path")
             .and_then(|value| value.as_str())
             .ok_or_else(|| anyhow!("read.path is required"))?;
-        let start_line = args.get("start_line").and_then(|value| value.as_u64()).map(|v| v as usize);
-        let end_line = args.get("end_line").and_then(|value| value.as_u64()).map(|v| v as usize);
+        let start_line = args
+            .get("start_line")
+            .and_then(|value| value.as_u64())
+            .map(|v| v as usize);
+        let end_line = args
+            .get("end_line")
+            .and_then(|value| value.as_u64())
+            .map(|v| v as usize);
 
         let resolved = resolve_existing_path(&context.root_dir, path)?;
         let content = fs::read_to_string(resolved).await?;
@@ -454,7 +460,10 @@ impl Tool for GrepTool {
         let root = resolve_existing_path(&context.root_dir, target_path)?;
         let mut matches = Vec::new();
 
-        for entry in WalkDir::new(root).into_iter().filter_map(std::result::Result::ok) {
+        for entry in WalkDir::new(root)
+            .into_iter()
+            .filter_map(std::result::Result::ok)
+        {
             let path = entry.path();
             if !path.is_file() {
                 continue;
@@ -515,7 +524,10 @@ impl Tool for FindTool {
         let root = resolve_existing_path(&context.root_dir, target_path)?;
         let mut files = Vec::new();
 
-        for entry in WalkDir::new(root).into_iter().filter_map(std::result::Result::ok) {
+        for entry in WalkDir::new(root)
+            .into_iter()
+            .filter_map(std::result::Result::ok)
+        {
             let path = entry.path();
             if path.to_string_lossy().to_lowercase().contains(&pattern) {
                 files.push(path.display().to_string());
@@ -605,8 +617,14 @@ impl Tool for MemoryGetTool {
             .get("path")
             .and_then(|value| value.as_str())
             .ok_or_else(|| anyhow!("memory_get.path is required"))?;
-        let start_line = args.get("start_line").and_then(|value| value.as_u64()).map(|v| v as usize);
-        let end_line = args.get("end_line").and_then(|value| value.as_u64()).map(|v| v as usize);
+        let start_line = args
+            .get("start_line")
+            .and_then(|value| value.as_u64())
+            .map(|v| v as usize);
+        let end_line = args
+            .get("end_line")
+            .and_then(|value| value.as_u64())
+            .map(|v| v as usize);
 
         let content = context.memory.get_file(path, start_line, end_line).await?;
 

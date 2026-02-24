@@ -1,25 +1,27 @@
 use anyhow::Result;
 
 use crate::config::AppConfig;
-
-const DEFAULT_SOUL: &str = include_str!("../../templates/personality/SOUL.md");
-const DEFAULT_IDENTITY: &str = include_str!("../../templates/personality/IDENTITY.md");
-const DEFAULT_USER: &str = include_str!("../../templates/personality/USER.md");
-const DEFAULT_AGENTS: &str = include_str!("../../templates/personality/AGENTS.md");
+use crate::runtime_assets::{
+    DEFAULT_AGENTS_MD, DEFAULT_IDENTITY_MD, DEFAULT_SOUL_MD, DEFAULT_USER_MD,
+};
 
 pub async fn bootstrap_runtime_dirs(config: &AppConfig) -> Result<()> {
-    // personality dir: only write defaults if the entire directory does not yet exist
-    if !config.personality_dir.exists() {
-        tokio::fs::create_dir_all(&config.personality_dir).await?;
-        let files = [
-            ("SOUL.md", DEFAULT_SOUL),
-            ("IDENTITY.md", DEFAULT_IDENTITY),
-            ("USER.md", DEFAULT_USER),
-            ("AGENTS.md", DEFAULT_AGENTS),
-        ];
-        for (name, content) in files {
-            tokio::fs::write(config.personality_dir.join(name), content).await?;
+    tokio::fs::create_dir_all(&config.personality_dir).await?;
+    let files = [
+        ("SOUL.md", DEFAULT_SOUL_MD),
+        ("IDENTITY.md", DEFAULT_IDENTITY_MD),
+        ("USER.md", DEFAULT_USER_MD),
+        ("AGENTS.md", DEFAULT_AGENTS_MD),
+    ];
+    let mut created = 0usize;
+    for (name, content) in files {
+        let path = config.personality_dir.join(name);
+        if !path.exists() {
+            tokio::fs::write(path, content).await?;
+            created += 1;
         }
+    }
+    if created > 0 {
         tracing::info!("bootstrapped default personality files");
     }
 
