@@ -16,6 +16,7 @@ fn make_config(root: PathBuf, personality_dir: PathBuf) -> AppConfig {
         max_tokens: 256,
         max_iterations: 3,
         token_budget: 2_000,
+        workspace: root.clone(),
         working_dir: root.clone(),
         personality_dir,
         memory_dir: root.join("memory"),

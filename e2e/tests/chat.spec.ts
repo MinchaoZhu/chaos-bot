@@ -1,3 +1,5 @@
+import fs from "node:fs/promises";
+import path from "node:path";
 import { expect, test, type Page } from "@playwright/test";
 
 async function openApp(page: Page) {
@@ -70,4 +72,35 @@ test("switching sessions restores each conversation", async ({ page }) => {
   );
   await expect(page.locator("#messages")).toContainText("message in session A");
   await expect(page.locator("#messages")).not.toContainText("message in session B");
+});
+
+test("runtime files are created under workspace", async ({ page }) => {
+  await openApp(page);
+
+  const runtimeRoot = process.env.E2E_TMP_DIR;
+  expect(runtimeRoot).toBeTruthy();
+
+  const workspace = path.join(runtimeRoot as string, "workspace");
+  for (const relativePath of [
+    "agent.json",
+    ".env.example",
+    "MEMORY.md",
+    "personality/SOUL.md",
+    "personality/IDENTITY.md",
+    "personality/USER.md",
+    "personality/AGENTS.md",
+    "data/sessions",
+    "memory",
+  ]) {
+    await expect
+      .poll(async () => {
+        try {
+          await fs.access(path.join(workspace, relativePath));
+          return true;
+        } catch {
+          return false;
+        }
+      })
+      .toBeTruthy();
+  }
 });

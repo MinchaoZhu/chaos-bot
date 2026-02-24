@@ -7,6 +7,8 @@ use std::path::PathBuf;
 
 use crate::runtime_assets::{DEFAULT_AGENT_JSON, DEFAULT_ENV_EXAMPLE};
 
+const DEFAULT_WORKSPACE_DIR: &str = ".chaos-bot";
+
 #[derive(Clone, Debug)]
 pub struct AppConfig {
     pub host: String,
@@ -20,6 +22,7 @@ pub struct AppConfig {
     pub max_tokens: u32,
     pub max_iterations: usize,
     pub token_budget: u32,
+    pub workspace: PathBuf,
     pub working_dir: PathBuf,
     pub personality_dir: PathBuf,
     pub memory_dir: PathBuf,
@@ -29,6 +32,8 @@ pub struct AppConfig {
 impl Default for AppConfig {
     fn default() -> Self {
         let cwd = env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
+        let workspace_base = home_dir().unwrap_or_else(|| cwd.clone());
+        let workspace = default_workspace_path(&workspace_base);
         Self {
             host: "0.0.0.0".to_string(),
             port: 3000,
@@ -41,10 +46,11 @@ impl Default for AppConfig {
             max_tokens: 1024,
             max_iterations: 6,
             token_budget: 12_000,
-            working_dir: cwd.clone(),
-            personality_dir: cwd.join("personality"),
-            memory_dir: cwd.join("memory"),
-            memory_file: cwd.join("MEMORY.md"),
+            working_dir: workspace.clone(),
+            personality_dir: workspace.join("personality"),
+            memory_dir: workspace.join("memory"),
+            memory_file: workspace.join("MEMORY.md"),
+            workspace,
         }
     }
 }
@@ -53,16 +59,13 @@ impl AppConfig {
     pub fn load() -> Result<Self> {
         dotenvy::dotenv().ok();
         let cwd = env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
+        let default_agent_file_path =
+            default_workspace_path(&home_dir().unwrap_or_else(|| cwd.clone())).join("agent.json");
         let agent_file_path = env::var("AGENT_CONFIG_PATH")
             .map(PathBuf::from)
-            .unwrap_or_else(|_| cwd.join("agent.json"));
+            .unwrap_or(default_agent_file_path);
         let resolved_agent_file_path = resolve_config_path(&cwd, &agent_file_path);
-        let config_root = config_root_from_agent_path(&cwd, &resolved_agent_file_path);
-        Self::from_agent_file_path(
-            &resolved_agent_file_path,
-            EnvSecrets::from_env(),
-            config_root,
-        )
+        Self::from_agent_file_path(&resolved_agent_file_path, EnvSecrets::from_env(), cwd)
     }
 
     pub fn from_agent_file_path(
@@ -74,15 +77,16 @@ impl AppConfig {
         ensure_runtime_config_files(&agent_path)?;
         let content = fs::read_to_string(&agent_path)?;
         let file_config: AgentFileConfig = serde_json::from_str(&content)?;
-        Ok(Self::from_inputs(file_config, env_secrets, cwd))
+        let workspace_base = home_dir().unwrap_or(cwd);
+        Ok(Self::from_inputs(file_config, env_secrets, workspace_base))
     }
 
     pub fn from_inputs(
         file_config: AgentFileConfig,
         env_secrets: EnvSecrets,
-        cwd: PathBuf,
+        workspace_base: PathBuf,
     ) -> Self {
-        let defaults = Self::defaults_for_cwd(cwd.clone());
+        let defaults = Self::defaults_for_workspace_base(workspace_base.clone());
         let mut config = defaults.clone();
 
         // Priority: defaults < env secrets < agent.json secrets
@@ -116,17 +120,9 @@ impl AppConfig {
             config.token_budget = token_budget;
         }
 
-        if let Some(path) = file_config.paths.working_dir {
-            config.working_dir = resolve_path(&cwd, path);
-        }
-        if let Some(path) = file_config.paths.personality_dir {
-            config.personality_dir = resolve_path(&cwd, path);
-        }
-        if let Some(path) = file_config.paths.memory_dir {
-            config.memory_dir = resolve_path(&cwd, path);
-        }
-        if let Some(path) = file_config.paths.memory_file {
-            config.memory_file = resolve_path(&cwd, path);
+        if let Some(workspace) = file_config.workspace {
+            config.workspace = resolve_workspace_path(&workspace_base, workspace);
+            config.derive_runtime_paths_from_workspace();
         }
 
         if let Some(openai_api_key) = file_config.secrets.openai_api_key {
@@ -142,7 +138,8 @@ impl AppConfig {
         config
     }
 
-    fn defaults_for_cwd(cwd: PathBuf) -> Self {
+    fn defaults_for_workspace_base(workspace_base: PathBuf) -> Self {
+        let workspace = default_workspace_path(&workspace_base);
         Self {
             host: "0.0.0.0".to_string(),
             port: 3000,
@@ -155,11 +152,19 @@ impl AppConfig {
             max_tokens: 1024,
             max_iterations: 6,
             token_budget: 12_000,
-            working_dir: cwd.clone(),
-            personality_dir: cwd.join("personality"),
-            memory_dir: cwd.join("memory"),
-            memory_file: cwd.join("MEMORY.md"),
+            working_dir: workspace.clone(),
+            personality_dir: workspace.join("personality"),
+            memory_dir: workspace.join("memory"),
+            memory_file: workspace.join("MEMORY.md"),
+            workspace,
         }
+    }
+
+    fn derive_runtime_paths_from_workspace(&mut self) {
+        self.working_dir = self.workspace.clone();
+        self.personality_dir = self.workspace.join("personality");
+        self.memory_dir = self.workspace.join("memory");
+        self.memory_file = self.workspace.join("MEMORY.md");
     }
 }
 
@@ -183,9 +188,9 @@ impl EnvSecrets {
 #[derive(Clone, Debug, Deserialize, Serialize, Default)]
 #[serde(default)]
 pub struct AgentFileConfig {
+    pub workspace: Option<PathBuf>,
     pub server: AgentServerConfig,
     pub llm: AgentLlmConfig,
-    pub paths: AgentPathsConfig,
     pub secrets: AgentSecretsConfig,
 }
 
@@ -209,15 +214,6 @@ pub struct AgentLlmConfig {
 
 #[derive(Clone, Debug, Deserialize, Serialize, Default)]
 #[serde(default)]
-pub struct AgentPathsConfig {
-    pub working_dir: Option<PathBuf>,
-    pub personality_dir: Option<PathBuf>,
-    pub memory_dir: Option<PathBuf>,
-    pub memory_file: Option<PathBuf>,
-}
-
-#[derive(Clone, Debug, Deserialize, Serialize, Default)]
-#[serde(default)]
 pub struct AgentSecretsConfig {
     pub openai_api_key: Option<String>,
     pub anthropic_api_key: Option<String>,
@@ -231,11 +227,11 @@ impl AgentFileConfig {
     }
 }
 
-fn resolve_path(cwd: &Path, path: PathBuf) -> PathBuf {
-    if path.is_relative() {
-        cwd.join(path)
+fn resolve_workspace_path(base: &Path, workspace: PathBuf) -> PathBuf {
+    if workspace.is_absolute() {
+        workspace
     } else {
-        path
+        base.join(workspace)
     }
 }
 
@@ -247,12 +243,14 @@ fn resolve_config_path(cwd: &Path, path: &Path) -> PathBuf {
     }
 }
 
-fn config_root_from_agent_path(cwd: &Path, path: &Path) -> PathBuf {
-    let resolved = resolve_config_path(cwd, path);
-    resolved
-        .parent()
+fn default_workspace_path(base: &Path) -> PathBuf {
+    base.join(DEFAULT_WORKSPACE_DIR)
+}
+
+fn home_dir() -> Option<PathBuf> {
+    env::var_os("HOME")
         .map(PathBuf::from)
-        .unwrap_or_else(|| cwd.to_path_buf())
+        .filter(|path| !path.as_os_str().is_empty())
 }
 
 fn ensure_runtime_config_files(agent_path: &Path) -> Result<()> {

@@ -1,9 +1,50 @@
 use chaos_bot_backend::config::{
-    AgentFileConfig, AgentLlmConfig, AgentPathsConfig, AgentSecretsConfig, AgentServerConfig,
-    AppConfig, EnvSecrets,
+    AgentFileConfig, AgentLlmConfig, AgentSecretsConfig, AgentServerConfig, AppConfig, EnvSecrets,
 };
 use serial_test::serial;
+use std::path::{Path, PathBuf};
 use tempfile::tempdir;
+
+struct EnvVarGuard {
+    key: &'static str,
+    original: Option<String>,
+}
+
+impl EnvVarGuard {
+    fn set(key: &'static str, value: &str) -> Self {
+        let original = std::env::var(key).ok();
+        std::env::set_var(key, value);
+        Self { key, original }
+    }
+}
+
+impl Drop for EnvVarGuard {
+    fn drop(&mut self) {
+        if let Some(value) = &self.original {
+            std::env::set_var(self.key, value);
+        } else {
+            std::env::remove_var(self.key);
+        }
+    }
+}
+
+struct CurrentDirGuard {
+    original: PathBuf,
+}
+
+impl CurrentDirGuard {
+    fn enter(path: &Path) -> Self {
+        let original = std::env::current_dir().expect("current dir");
+        std::env::set_current_dir(path).expect("set current dir");
+        Self { original }
+    }
+}
+
+impl Drop for CurrentDirGuard {
+    fn drop(&mut self) {
+        std::env::set_current_dir(&self.original).expect("restore current dir");
+    }
+}
 
 fn clear_legacy_and_secret_envs() {
     for key in &[
@@ -22,9 +63,15 @@ fn clear_legacy_and_secret_envs() {
         "OPENAI_API_KEY",
         "ANTHROPIC_API_KEY",
         "GEMINI_API_KEY",
+        "AGENT_CONFIG_PATH",
     ] {
         std::env::remove_var(key);
     }
+}
+
+fn setup_home(root: &Path) -> EnvVarGuard {
+    std::fs::create_dir_all(root).unwrap();
+    EnvVarGuard::set("HOME", root.to_str().unwrap())
 }
 
 #[test]
@@ -32,7 +79,11 @@ fn clear_legacy_and_secret_envs() {
 fn creates_default_agent_json_when_missing() {
     clear_legacy_and_secret_envs();
     let temp = tempdir().unwrap();
-    let cwd = temp.path().to_path_buf();
+    let home = temp.path().join("home");
+    let _home_guard = setup_home(&home);
+
+    let cwd = temp.path().join("cfg");
+    std::fs::create_dir_all(&cwd).unwrap();
     let agent_path = cwd.join("agent.json");
     let env_example_path = cwd.join(".env.example");
 
@@ -55,7 +106,11 @@ fn creates_default_agent_json_when_missing() {
     assert!(config.openai_api_key.is_none());
     assert!(config.anthropic_api_key.is_none());
     assert!(config.gemini_api_key.is_none());
-    assert_eq!(config.working_dir, cwd);
+    assert_eq!(config.workspace, home.join(".chaos-bot"));
+    assert_eq!(config.working_dir, home.join(".chaos-bot"));
+    assert_eq!(config.personality_dir, home.join(".chaos-bot/personality"));
+    assert_eq!(config.memory_dir, home.join(".chaos-bot/memory"));
+    assert_eq!(config.memory_file, home.join(".chaos-bot/MEMORY.md"));
 }
 
 #[test]
@@ -63,9 +118,14 @@ fn creates_default_agent_json_when_missing() {
 fn agent_json_overrides_runtime_settings() {
     clear_legacy_and_secret_envs();
     let temp = tempdir().unwrap();
-    let cwd = temp.path().to_path_buf();
+    let home = temp.path().join("home");
+    let _home_guard = setup_home(&home);
+
+    let cwd = temp.path().join("cfg");
+    std::fs::create_dir_all(&cwd).unwrap();
     let agent_path = cwd.join("agent.json");
     let custom = AgentFileConfig {
+        workspace: Some(PathBuf::from("./runtime")),
         server: AgentServerConfig {
             host: Some("127.0.0.1".to_string()),
             port: Some(8080),
@@ -77,12 +137,6 @@ fn agent_json_overrides_runtime_settings() {
             max_tokens: Some(2048),
             max_iterations: Some(10),
             token_budget: Some(20_000),
-        },
-        paths: AgentPathsConfig {
-            working_dir: Some(std::path::PathBuf::from("./runtime")),
-            personality_dir: Some(std::path::PathBuf::from("./personality-x")),
-            memory_dir: Some(std::path::PathBuf::from("./memory-x")),
-            memory_file: Some(std::path::PathBuf::from("./MEMX.md")),
         },
         secrets: AgentSecretsConfig::default(),
     };
@@ -103,10 +157,36 @@ fn agent_json_overrides_runtime_settings() {
     assert_eq!(config.max_tokens, 2048);
     assert_eq!(config.max_iterations, 10);
     assert_eq!(config.token_budget, 20_000);
-    assert_eq!(config.working_dir, cwd.join("runtime"));
-    assert_eq!(config.personality_dir, cwd.join("personality-x"));
-    assert_eq!(config.memory_dir, cwd.join("memory-x"));
-    assert_eq!(config.memory_file, cwd.join("MEMX.md"));
+    assert_eq!(config.workspace, home.join("runtime"));
+    assert_eq!(config.working_dir, home.join("runtime"));
+    assert_eq!(config.personality_dir, home.join("runtime/personality"));
+    assert_eq!(config.memory_dir, home.join("runtime/memory"));
+    assert_eq!(config.memory_file, home.join("runtime/MEMORY.md"));
+}
+
+#[test]
+#[serial]
+fn absolute_workspace_is_used_as_is() {
+    clear_legacy_and_secret_envs();
+    let temp = tempdir().unwrap();
+    let home = temp.path().join("home");
+    let _home_guard = setup_home(&home);
+
+    let cwd = temp.path().join("cfg");
+    std::fs::create_dir_all(&cwd).unwrap();
+    let absolute_workspace = temp.path().join("absolute-workspace");
+    let config = AppConfig::from_inputs(
+        AgentFileConfig {
+            workspace: Some(absolute_workspace.clone()),
+            server: AgentServerConfig::default(),
+            llm: AgentLlmConfig::default(),
+            secrets: AgentSecretsConfig::default(),
+        },
+        EnvSecrets::default(),
+        home.clone(),
+    );
+    assert_eq!(config.workspace, absolute_workspace.clone());
+    assert_eq!(config.working_dir, absolute_workspace);
 }
 
 #[test]
@@ -114,14 +194,18 @@ fn agent_json_overrides_runtime_settings() {
 fn env_secrets_apply_when_json_secrets_missing() {
     clear_legacy_and_secret_envs();
     let temp = tempdir().unwrap();
-    let cwd = temp.path().to_path_buf();
+    let home = temp.path().join("home");
+    let _home_guard = setup_home(&home);
+
+    let cwd = temp.path().join("cfg");
+    std::fs::create_dir_all(&cwd).unwrap();
     let agent_path = cwd.join("agent.json");
     std::fs::write(
         &agent_path,
         r#"{
+  "workspace": ".chaos-bot",
   "server": { "host": "0.0.0.0", "port": 3000 },
   "llm": { "provider": "openai", "model": "gpt-4o-mini" },
-  "paths": { "working_dir": ".", "personality_dir": "./personality", "memory_dir": "./memory", "memory_file": "./MEMORY.md" },
   "secrets": {}
 }
 "#,
@@ -145,7 +229,11 @@ fn env_secrets_apply_when_json_secrets_missing() {
 fn json_secrets_override_env_secrets() {
     clear_legacy_and_secret_envs();
     let temp = tempdir().unwrap();
-    let cwd = temp.path().to_path_buf();
+    let home = temp.path().join("home");
+    let _home_guard = setup_home(&home);
+
+    let cwd = temp.path().join("cfg");
+    std::fs::create_dir_all(&cwd).unwrap();
     let agent_path = cwd.join("agent.json");
     std::fs::write(
         &agent_path,
@@ -182,7 +270,11 @@ fn legacy_chaos_env_vars_are_ignored() {
     std::env::set_var("CHAOS_PROVIDER", "mock");
 
     let temp = tempdir().unwrap();
-    let cwd = temp.path().to_path_buf();
+    let home = temp.path().join("home");
+    let _home_guard = setup_home(&home);
+
+    let cwd = temp.path().join("cfg");
+    std::fs::create_dir_all(&cwd).unwrap();
     let config =
         AppConfig::from_agent_file_path(&cwd.join("agent.json"), EnvSecrets::default(), cwd)
             .unwrap();
@@ -190,6 +282,7 @@ fn legacy_chaos_env_vars_are_ignored() {
     assert_eq!(config.host, "0.0.0.0");
     assert_eq!(config.port, 3000);
     assert_eq!(config.provider, "openai");
+    assert_eq!(config.workspace, home.join(".chaos-bot"));
 
     std::env::remove_var("CHAOS_HOST");
     std::env::remove_var("CHAOS_PORT");
@@ -197,9 +290,11 @@ fn legacy_chaos_env_vars_are_ignored() {
 }
 
 #[test]
+#[serial]
 fn from_inputs_supports_injected_config_source() {
-    let cwd = std::path::PathBuf::from("/tmp/project-root");
+    let home = std::path::PathBuf::from("/tmp/home-base");
     let file_config = AgentFileConfig {
+        workspace: Some(std::path::PathBuf::from("./wd")),
         server: AgentServerConfig {
             host: Some("localhost".to_string()),
             port: Some(4444),
@@ -211,12 +306,6 @@ fn from_inputs_supports_injected_config_source() {
             max_tokens: Some(256),
             max_iterations: Some(2),
             token_budget: Some(4096),
-        },
-        paths: AgentPathsConfig {
-            working_dir: Some(std::path::PathBuf::from("./wd")),
-            personality_dir: Some(std::path::PathBuf::from("./p")),
-            memory_dir: Some(std::path::PathBuf::from("./m")),
-            memory_file: Some(std::path::PathBuf::from("./M.md")),
         },
         secrets: AgentSecretsConfig {
             openai_api_key: Some("json-key".to_string()),
@@ -230,12 +319,41 @@ fn from_inputs_supports_injected_config_source() {
         gemini_api_key: None,
     };
 
-    let config = AppConfig::from_inputs(file_config, env_secrets, cwd.clone());
+    let config = AppConfig::from_inputs(file_config, env_secrets, home.clone());
 
     assert_eq!(config.host, "localhost");
     assert_eq!(config.port, 4444);
     assert_eq!(config.provider, "mock");
     assert_eq!(config.model, "m");
     assert_eq!(config.openai_api_key.as_deref(), Some("json-key"));
-    assert_eq!(config.working_dir, cwd.join("wd"));
+    assert_eq!(config.workspace, home.join("wd"));
+    assert_eq!(config.working_dir, home.join("wd"));
+    assert_eq!(config.personality_dir, home.join("wd/personality"));
+    assert_eq!(config.memory_dir, home.join("wd/memory"));
+    assert_eq!(config.memory_file, home.join("wd/MEMORY.md"));
+}
+
+#[test]
+#[serial]
+fn load_uses_home_workspace_when_agent_config_path_is_external() {
+    clear_legacy_and_secret_envs();
+    let temp = tempdir().unwrap();
+    let home = temp.path().join("home");
+    let _home_guard = setup_home(&home);
+
+    let cwd = temp.path().join("cwd");
+    std::fs::create_dir_all(&cwd).unwrap();
+    let _cwd_guard = CurrentDirGuard::enter(&cwd);
+
+    let external_dir = temp.path().join("external-config");
+    std::fs::create_dir_all(&external_dir).unwrap();
+    let external_config = external_dir.join("agent.custom.json");
+    let _config_guard = EnvVarGuard::set("AGENT_CONFIG_PATH", external_config.to_str().unwrap());
+
+    let config = AppConfig::load().expect("load config");
+
+    assert!(external_config.exists());
+    assert!(external_dir.join(".env.example").exists());
+    assert_eq!(config.workspace, home.join(".chaos-bot"));
+    assert_eq!(config.working_dir, home.join(".chaos-bot"));
 }
