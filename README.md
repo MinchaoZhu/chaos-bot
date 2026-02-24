@@ -54,6 +54,11 @@ Existing files are preserved; only missing files are generated.
   "workspace": ".chaos-bot",
   "server": { "host": "0.0.0.0", "port": 3000 },
   "llm": { "provider": "openai", "model": "gpt-4o-mini" },
+  "logging": {
+    "level": "info",
+    "retention_days": 7,
+    "directory": "logs"
+  },
   "secrets": {}
 }
 ```
@@ -64,6 +69,12 @@ Workspace resolution rules:
 - Absolute `workspace` values are used directly
 - Default `.chaos-bot` resolves to `~/.chaos-bot`
 
+Logging rules:
+
+- `logging.level`: `debug | info | warning | error` (`warning` maps to runtime `warn`)
+- `logging.retention_days`: max days to keep dated log files (default `7`)
+- `logging.directory`: relative path resolves under workspace (default `logs`)
+
 Priority order:
 
 1. Embedded defaults
@@ -72,6 +83,22 @@ Priority order:
 
 `CHAOS_*` runtime environment variables are not used.
 You can override config path with `AGENT_CONFIG_PATH`.
+
+## Logging
+
+chaos-bot writes logs to both stdout and workspace log files:
+
+- Log directory: `<workspace>/logs` by default
+- Log filename: `YYYY-MM-DD.log`
+- Writer model: async queue (non-blocking writer), flushed on process shutdown
+- Retention: files older than `logging.retention_days` are removed on startup
+
+Useful commands:
+
+```bash
+tail -f ~/.chaos-bot/logs/$(date +%F).log
+ls -lah ~/.chaos-bot/logs
+```
 
 ## Test Isolation (`.tmp`)
 

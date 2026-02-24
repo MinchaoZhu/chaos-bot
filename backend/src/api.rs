@@ -81,11 +81,15 @@ async fn health() -> Json<HealthResponse> {
 }
 
 async fn create_session(State(state): State<AppState>) -> Json<SessionState> {
-    Json(state.sessions.create().await)
+    let session = state.sessions.create().await;
+    tracing::info!(session_id = %session.id, "api create session");
+    Json(session)
 }
 
 async fn list_sessions(State(state): State<AppState>) -> Json<Vec<SessionState>> {
-    Json(state.sessions.list().await)
+    let sessions = state.sessions.list().await;
+    tracing::debug!(count = sessions.len(), "api list sessions");
+    Json(sessions)
 }
 
 async fn get_session(
@@ -97,6 +101,7 @@ async fn get_session(
         .get(&id)
         .await
         .ok_or(axum::http::StatusCode::NOT_FOUND)?;
+    tracing::debug!(session_id = %id, "api get session");
     Ok(Json(session))
 }
 
@@ -105,8 +110,10 @@ async fn delete_session(
     State(state): State<AppState>,
 ) -> Result<axum::http::StatusCode, axum::http::StatusCode> {
     if state.sessions.delete(&id).await {
+        tracing::info!(session_id = %id, "api delete session");
         Ok(axum::http::StatusCode::NO_CONTENT)
     } else {
+        tracing::debug!(session_id = %id, "api delete missing session");
         Err(axum::http::StatusCode::NOT_FOUND)
     }
 }
@@ -115,6 +122,11 @@ async fn chat(
     State(state): State<AppState>,
     Json(payload): Json<ChatRequest>,
 ) -> Sse<impl Stream<Item = Result<Event, Infallible>>> {
+    tracing::info!(
+        has_session_id = payload.session_id.is_some(),
+        message_chars = payload.message.chars().count(),
+        "api chat request"
+    );
     let (tx, rx) = mpsc::unbounded_channel::<Result<Event, Infallible>>();
 
     tokio::spawn(async move {
@@ -124,14 +136,19 @@ async fn chat(
 
         let (session_id, mut session) = match payload.session_id {
             Some(id) => match state.sessions.get(&id).await {
-                Some(existing) => (id, existing),
+                Some(existing) => {
+                    tracing::debug!(session_id = %id, "chat using existing session");
+                    (id, existing)
+                }
                 None => {
                     let created = SessionState::new(id.clone());
+                    tracing::info!(session_id = %id, "chat created missing session id");
                     (id, created)
                 }
             },
             None => {
                 let created = state.sessions.create().await;
+                tracing::info!(session_id = %created.id, "chat auto-created session");
                 (created.id.clone(), created)
             }
         };
@@ -156,10 +173,16 @@ async fn chat(
 
         match result {
             Ok(output) => {
+                tracing::info!(
+                    session_id = %session_id,
+                    finish_reason = output.finish_reason.as_deref().unwrap_or("unknown"),
+                    usage_total_tokens = output.usage.as_ref().map(|u| u.total_tokens),
+                    "chat completed"
+                );
                 send_event(
                     Event::default().event("done").data(
                         json!({
-                            "session_id": session_id,
+                            "session_id": session_id.clone(),
                             "usage": output.usage,
                             "finish_reason": output.finish_reason,
                         })
@@ -168,6 +191,11 @@ async fn chat(
                 );
             }
             Err(error) => {
+                tracing::warn!(
+                    session_id = %session_id,
+                    error = %error,
+                    "chat run_stream failed"
+                );
                 send_event(
                     Event::default()
                         .event("error")
@@ -177,6 +205,7 @@ async fn chat(
         }
 
         state.sessions.upsert(session).await;
+        tracing::debug!(session_id = %session_id, "chat session persisted");
     });
 
     Sse::new(UnboundedReceiverStream::new(rx)).keep_alive(

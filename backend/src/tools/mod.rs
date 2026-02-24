@@ -90,6 +90,7 @@ impl ToolRegistry {
         args: Value,
         context: &ToolContext,
     ) -> Result<ToolResult> {
+        tracing::debug!(tool_call_id, tool_name = name, "dispatching tool");
         let tool = self
             .tools
             .get(name)
@@ -97,6 +98,12 @@ impl ToolRegistry {
             .clone();
 
         let output = tool.execute(args, context).await?;
+        tracing::debug!(
+            tool_call_id,
+            tool_name = name,
+            is_error = output.is_error,
+            "tool execution completed"
+        );
 
         Ok(ToolResult {
             tool_call_id: tool_call_id.to_string(),

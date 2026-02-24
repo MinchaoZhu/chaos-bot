@@ -24,6 +24,11 @@ cat >"${TMP_AGENT_FILE}" <<EOF
     "token_budget": 12000
   },
   "workspace": "${RUNTIME_WORK_DIR}",
+  "logging": {
+    "level": "info",
+    "retention_days": 7,
+    "directory": "logs"
+  },
   "secrets": {}
 }
 EOF

@@ -7,6 +7,10 @@ use crate::runtime_assets::{
 
 pub async fn bootstrap_runtime_dirs(config: &AppConfig) -> Result<()> {
     tokio::fs::create_dir_all(&config.personality_dir).await?;
+    tracing::debug!(
+        personality_dir = %config.personality_dir.display(),
+        "ensured personality directory"
+    );
     let files = [
         ("SOUL.md", DEFAULT_SOUL_MD),
         ("IDENTITY.md", DEFAULT_IDENTITY_MD),
@@ -22,11 +26,17 @@ pub async fn bootstrap_runtime_dirs(config: &AppConfig) -> Result<()> {
         }
     }
     if created > 0 {
-        tracing::info!("bootstrapped default personality files");
+        tracing::info!(
+            created_files = created,
+            personality_dir = %config.personality_dir.display(),
+            "bootstrapped default personality files"
+        );
     }
 
     // data/sessions dir
-    tokio::fs::create_dir_all(config.working_dir.join("data/sessions")).await?;
+    let sessions_dir = config.working_dir.join("data/sessions");
+    tokio::fs::create_dir_all(&sessions_dir).await?;
+    tracing::debug!(sessions_dir = %sessions_dir.display(), "ensured sessions directory");
 
     Ok(())
 }
