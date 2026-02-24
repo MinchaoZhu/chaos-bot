@@ -21,6 +21,7 @@ test-unit:
 		--test unit_personality \
 		--test unit_bootstrap \
 		--test unit_config \
+		--test unit_logging \
 		--test unit_tools \
 		--test unit_llm \
 		--test unit_agent \

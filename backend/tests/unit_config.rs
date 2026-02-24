@@ -1,5 +1,6 @@
 use chaos_bot_backend::config::{
-    AgentFileConfig, AgentLlmConfig, AgentSecretsConfig, AgentServerConfig, AppConfig, EnvSecrets,
+    AgentFileConfig, AgentLlmConfig, AgentLoggingConfig, AgentSecretsConfig, AgentServerConfig,
+    AppConfig, EnvSecrets,
 };
 use serial_test::serial;
 use std::path::{Path, PathBuf};
@@ -107,6 +108,9 @@ fn creates_default_agent_json_when_missing() {
     assert!(config.anthropic_api_key.is_none());
     assert!(config.gemini_api_key.is_none());
     assert_eq!(config.workspace, home.join(".chaos-bot"));
+    assert_eq!(config.log_level, "info");
+    assert_eq!(config.log_retention_days, 7);
+    assert_eq!(config.log_dir, home.join(".chaos-bot/logs"));
     assert_eq!(config.working_dir, home.join(".chaos-bot"));
     assert_eq!(config.personality_dir, home.join(".chaos-bot/personality"));
     assert_eq!(config.memory_dir, home.join(".chaos-bot/memory"));
@@ -126,6 +130,11 @@ fn agent_json_overrides_runtime_settings() {
     let agent_path = cwd.join("agent.json");
     let custom = AgentFileConfig {
         workspace: Some(PathBuf::from("./runtime")),
+        logging: AgentLoggingConfig {
+            level: Some("warning".to_string()),
+            retention_days: Some(14),
+            directory: Some(PathBuf::from("./app-logs")),
+        },
         server: AgentServerConfig {
             host: Some("127.0.0.1".to_string()),
             port: Some(8080),
@@ -158,6 +167,9 @@ fn agent_json_overrides_runtime_settings() {
     assert_eq!(config.max_iterations, 10);
     assert_eq!(config.token_budget, 20_000);
     assert_eq!(config.workspace, home.join("runtime"));
+    assert_eq!(config.log_level, "warn");
+    assert_eq!(config.log_retention_days, 14);
+    assert_eq!(config.log_dir, home.join("runtime/app-logs"));
     assert_eq!(config.working_dir, home.join("runtime"));
     assert_eq!(config.personality_dir, home.join("runtime/personality"));
     assert_eq!(config.memory_dir, home.join("runtime/memory"));
@@ -178,6 +190,7 @@ fn absolute_workspace_is_used_as_is() {
     let config = AppConfig::from_inputs(
         AgentFileConfig {
             workspace: Some(absolute_workspace.clone()),
+            logging: AgentLoggingConfig::default(),
             server: AgentServerConfig::default(),
             llm: AgentLlmConfig::default(),
             secrets: AgentSecretsConfig::default(),
@@ -295,6 +308,11 @@ fn from_inputs_supports_injected_config_source() {
     let home = std::path::PathBuf::from("/tmp/home-base");
     let file_config = AgentFileConfig {
         workspace: Some(std::path::PathBuf::from("./wd")),
+        logging: AgentLoggingConfig {
+            level: Some("debug".to_string()),
+            retention_days: Some(3),
+            directory: Some(std::path::PathBuf::from("./my-logs")),
+        },
         server: AgentServerConfig {
             host: Some("localhost".to_string()),
             port: Some(4444),
@@ -327,6 +345,9 @@ fn from_inputs_supports_injected_config_source() {
     assert_eq!(config.model, "m");
     assert_eq!(config.openai_api_key.as_deref(), Some("json-key"));
     assert_eq!(config.workspace, home.join("wd"));
+    assert_eq!(config.log_level, "debug");
+    assert_eq!(config.log_retention_days, 3);
+    assert_eq!(config.log_dir, home.join("wd/my-logs"));
     assert_eq!(config.working_dir, home.join("wd"));
     assert_eq!(config.personality_dir, home.join("wd/personality"));
     assert_eq!(config.memory_dir, home.join("wd/memory"));
@@ -355,5 +376,6 @@ fn load_uses_home_workspace_when_agent_config_path_is_external() {
     assert!(external_config.exists());
     assert!(external_dir.join(".env.example").exists());
     assert_eq!(config.workspace, home.join(".chaos-bot"));
+    assert_eq!(config.log_dir, home.join(".chaos-bot/logs"));
     assert_eq!(config.working_dir, home.join(".chaos-bot"));
 }

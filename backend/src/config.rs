@@ -23,6 +23,9 @@ pub struct AppConfig {
     pub max_iterations: usize,
     pub token_budget: u32,
     pub workspace: PathBuf,
+    pub log_level: String,
+    pub log_retention_days: u16,
+    pub log_dir: PathBuf,
     pub working_dir: PathBuf,
     pub personality_dir: PathBuf,
     pub memory_dir: PathBuf,
@@ -46,6 +49,9 @@ impl Default for AppConfig {
             max_tokens: 1024,
             max_iterations: 6,
             token_budget: 12_000,
+            log_level: "info".to_string(),
+            log_retention_days: 7,
+            log_dir: workspace.join("logs"),
             working_dir: workspace.clone(),
             personality_dir: workspace.join("personality"),
             memory_dir: workspace.join("memory"),
@@ -125,6 +131,16 @@ impl AppConfig {
             config.derive_runtime_paths_from_workspace();
         }
 
+        if let Some(level) = file_config.logging.level {
+            config.log_level = normalize_log_level(level);
+        }
+        if let Some(retention_days) = file_config.logging.retention_days {
+            config.log_retention_days = retention_days.max(1);
+        }
+        if let Some(directory) = file_config.logging.directory {
+            config.log_dir = resolve_log_dir(&config.workspace, directory);
+        }
+
         if let Some(openai_api_key) = file_config.secrets.openai_api_key {
             config.openai_api_key = Some(openai_api_key);
         }
@@ -152,6 +168,9 @@ impl AppConfig {
             max_tokens: 1024,
             max_iterations: 6,
             token_budget: 12_000,
+            log_level: "info".to_string(),
+            log_retention_days: 7,
+            log_dir: workspace.join("logs"),
             working_dir: workspace.clone(),
             personality_dir: workspace.join("personality"),
             memory_dir: workspace.join("memory"),
@@ -161,6 +180,7 @@ impl AppConfig {
     }
 
     fn derive_runtime_paths_from_workspace(&mut self) {
+        self.log_dir = self.workspace.join("logs");
         self.working_dir = self.workspace.clone();
         self.personality_dir = self.workspace.join("personality");
         self.memory_dir = self.workspace.join("memory");
@@ -189,6 +209,7 @@ impl EnvSecrets {
 #[serde(default)]
 pub struct AgentFileConfig {
     pub workspace: Option<PathBuf>,
+    pub logging: AgentLoggingConfig,
     pub server: AgentServerConfig,
     pub llm: AgentLlmConfig,
     pub secrets: AgentSecretsConfig,
@@ -214,6 +235,14 @@ pub struct AgentLlmConfig {
 
 #[derive(Clone, Debug, Deserialize, Serialize, Default)]
 #[serde(default)]
+pub struct AgentLoggingConfig {
+    pub level: Option<String>,
+    pub retention_days: Option<u16>,
+    pub directory: Option<PathBuf>,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize, Default)]
+#[serde(default)]
 pub struct AgentSecretsConfig {
     pub openai_api_key: Option<String>,
     pub anthropic_api_key: Option<String>,
@@ -232,6 +261,24 @@ fn resolve_workspace_path(base: &Path, workspace: PathBuf) -> PathBuf {
         workspace
     } else {
         base.join(workspace)
+    }
+}
+
+fn resolve_log_dir(workspace: &Path, directory: PathBuf) -> PathBuf {
+    if directory.is_absolute() {
+        directory
+    } else {
+        workspace.join(directory)
+    }
+}
+
+fn normalize_log_level(level: String) -> String {
+    match level.to_ascii_lowercase().as_str() {
+        "debug" => "debug".to_string(),
+        "info" => "info".to_string(),
+        "warning" | "warn" => "warn".to_string(),
+        "error" => "error".to_string(),
+        _ => "info".to_string(),
     }
 }
 

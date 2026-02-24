@@ -56,9 +56,11 @@ impl MemoryStore {
     pub async fn ensure_layout(&self) -> Result<()> {
         if !self.memory_dir.exists() {
             fs::create_dir_all(&self.memory_dir).await?;
+            tracing::debug!(memory_dir = %self.memory_dir.display(), "created memory directory");
         }
         if !self.curated_file.exists() {
             fs::write(&self.curated_file, DEFAULT_MEMORY_MD).await?;
+            tracing::debug!(curated_file = %self.curated_file.display(), "created curated memory file");
         }
         Ok(())
     }
@@ -87,6 +89,7 @@ impl MemoryStore {
             .await?;
         file.write_all(format!("- {}\n", summary.trim()).as_bytes())
             .await?;
+        tracing::debug!(path = %file_path.display(), "appended memory daily log");
         Ok(file_path)
     }
 

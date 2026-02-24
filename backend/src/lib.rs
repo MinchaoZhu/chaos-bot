@@ -3,6 +3,7 @@ pub mod api;
 pub mod bootstrap;
 pub mod config;
 pub mod llm;
+pub mod logging;
 pub mod memory;
 pub mod personality;
 pub mod runtime_assets;

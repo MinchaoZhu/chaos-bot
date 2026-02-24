@@ -103,4 +103,23 @@ test("runtime files are created under workspace", async ({ page }) => {
       })
       .toBeTruthy();
   }
+
+  const logsDir = path.join(workspace, "logs");
+  let activeLogPath = "";
+  await expect
+    .poll(async () => {
+      try {
+        const files = await fs.readdir(logsDir);
+        const logFile = files.find((name) => name.endsWith(".log"));
+        if (!logFile) return "";
+        activeLogPath = path.join(logsDir, logFile);
+        const content = await fs.readFile(activeLogPath, "utf8");
+        return content;
+      } catch {
+        return "";
+      }
+    })
+    .toContain("chaos-bot logging initialized");
+  const activeLogContent = await fs.readFile(activeLogPath, "utf8");
+  expect(activeLogContent).toContain("INFO");
 });

@@ -20,15 +20,20 @@ impl SessionStore {
             .write()
             .await
             .insert(session.id.clone(), session.clone());
+        tracing::debug!(session_id = %session.id, "created session");
         session
     }
 
     pub async fn get(&self, id: &str) -> Option<SessionState> {
-        self.inner.read().await.get(id).cloned()
+        let found = self.inner.read().await.get(id).cloned();
+        tracing::debug!(session_id = %id, found = found.is_some(), "fetched session");
+        found
     }
 
     pub async fn upsert(&self, session: SessionState) {
-        self.inner.write().await.insert(session.id.clone(), session);
+        let session_id = session.id.clone();
+        self.inner.write().await.insert(session_id.clone(), session);
+        tracing::debug!(session_id = %session_id, "upserted session");
     }
 
     pub async fn list(&self) -> Vec<SessionState> {
@@ -40,10 +45,13 @@ impl SessionStore {
             .cloned()
             .collect::<Vec<_>>();
         sessions.sort_by(|a, b| b.updated_at.cmp(&a.updated_at));
+        tracing::debug!(count = sessions.len(), "listed sessions");
         sessions
     }
 
     pub async fn delete(&self, id: &str) -> bool {
-        self.inner.write().await.remove(id).is_some()
+        let deleted = self.inner.write().await.remove(id).is_some();
+        tracing::debug!(session_id = %id, deleted, "deleted session");
+        deleted
     }
 }

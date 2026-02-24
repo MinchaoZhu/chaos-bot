@@ -97,7 +97,20 @@ impl AgentLoop {
         F: FnMut(AgentStreamEvent),
     {
         let system_prompt = self.personality.system_prompt().await?;
-        let memory_context = self.memory.search(&user_input).await.unwrap_or_default();
+        let memory_context = match self.memory.search(&user_input).await {
+            Ok(hits) => hits,
+            Err(error) => {
+                tracing::warn!(error = %error, "memory search failed; continuing without context");
+                Vec::new()
+            }
+        };
+
+        tracing::debug!(
+            session_id = %session.id,
+            input_chars = user_input.chars().count(),
+            memory_hits = memory_context.len(),
+            "agent run_stream start"
+        );
 
         let user_message = Message::user(user_input.clone());
         session.push_message(user_message);
@@ -112,7 +125,13 @@ impl AgentLoop {
         let mut finish_reason = None;
         let mut tool_events = Vec::new();
 
-        for _ in 0..self.config.max_iterations {
+        for iteration in 0..self.config.max_iterations {
+            tracing::debug!(
+                session_id = %session.id,
+                iteration = iteration + 1,
+                max_iterations = self.config.max_iterations,
+                "agent iteration"
+            );
             Self::enforce_token_budget(&mut messages, self.config.token_budget);
 
             let mut stream = self
@@ -162,6 +181,11 @@ impl AgentLoop {
                         .collect::<String>()
                 );
                 let _ = self.memory.append_daily_log(&summary).await;
+                tracing::info!(
+                    session_id = %session.id,
+                    assistant_chars = assistant_message.content.chars().count(),
+                    "agent completed without tool calls"
+                );
 
                 return Ok(AgentRunOutput {
                     assistant_message,
@@ -174,8 +198,19 @@ impl AgentLoop {
             finish_reason = Some("tool_calls".to_string());
             let tool_context =
                 ToolContext::new(self.config.working_dir.clone(), self.memory.clone());
+            tracing::debug!(
+                session_id = %session.id,
+                tool_calls = tool_calls.len(),
+                "agent executing tool calls"
+            );
 
             for call in tool_calls {
+                tracing::debug!(
+                    session_id = %session.id,
+                    tool_name = %call.name,
+                    tool_call_id = %call.id,
+                    "agent dispatch tool call"
+                );
                 let result = match self
                     .tools
                     .dispatch(&call.id, &call.name, call.arguments.clone(), &tool_context)
@@ -189,6 +224,14 @@ impl AgentLoop {
                         is_error: true,
                     },
                 };
+                if result.is_error {
+                    tracing::warn!(
+                        session_id = %session.id,
+                        tool_name = %call.name,
+                        tool_call_id = %call.id,
+                        "agent tool call returned error"
+                    );
+                }
 
                 let tool_message = Message::tool(&call.name, &call.id, &result.output);
                 session.push_message(tool_message.clone());
@@ -203,6 +246,11 @@ impl AgentLoop {
         let assistant_message =
             Message::assistant("Agent reached max iterations without a final answer.");
         session.push_message(assistant_message.clone());
+        tracing::warn!(
+            session_id = %session.id,
+            max_iterations = self.config.max_iterations,
+            "agent reached max iterations"
+        );
 
         Ok(AgentRunOutput {
             assistant_message,

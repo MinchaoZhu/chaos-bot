@@ -9,6 +9,7 @@ use serde_json::{json, Value};
 use std::collections::{HashMap, VecDeque};
 use std::pin::Pin;
 use std::sync::Arc;
+use tracing::{debug, info, warn};
 
 pub type LlmStream = Pin<Box<dyn Stream<Item = Result<LlmStreamEvent>> + Send>>;
 
@@ -54,6 +55,7 @@ pub fn build_provider(config: &AppConfig) -> Result<Arc<dyn LlmProvider>> {
                 .openai_api_key
                 .clone()
                 .ok_or_else(|| anyhow!("openai_api_key is required (set OPENAI_API_KEY or agent.json secrets.openai_api_key)"))?;
+            info!(provider = "openai", "llm provider selected");
             Ok(Arc::new(OpenAiProvider::new(api_key)))
         }
         "anthropic" => {
@@ -61,6 +63,7 @@ pub fn build_provider(config: &AppConfig) -> Result<Arc<dyn LlmProvider>> {
                 .anthropic_api_key
                 .as_ref()
                 .ok_or_else(|| anyhow!("anthropic_api_key is required (set ANTHROPIC_API_KEY or agent.json secrets.anthropic_api_key)"))?;
+            info!(provider = "anthropic", "llm provider selected");
             Ok(Arc::new(AnthropicProvider))
         }
         "gemini" => {
@@ -68,10 +71,17 @@ pub fn build_provider(config: &AppConfig) -> Result<Arc<dyn LlmProvider>> {
                 .gemini_api_key
                 .as_ref()
                 .ok_or_else(|| anyhow!("gemini_api_key is required (set GEMINI_API_KEY or agent.json secrets.gemini_api_key)"))?;
+            info!(provider = "gemini", "llm provider selected");
             Ok(Arc::new(GeminiProvider))
         }
-        "mock" => Ok(Arc::new(MockProvider)),
-        other => Err(anyhow!("unsupported provider: {other}")),
+        "mock" => {
+            info!(provider = "mock", "llm provider selected");
+            Ok(Arc::new(MockProvider))
+        }
+        other => {
+            warn!(provider = %other, "unsupported llm provider");
+            Err(anyhow!("unsupported provider: {other}"))
+        }
     }
 }
 
@@ -441,6 +451,12 @@ impl LlmProvider for OpenAiProvider {
     }
 
     async fn chat(&self, request: LlmRequest) -> Result<LlmResponse> {
+        debug!(
+            provider = "openai",
+            messages = request.messages.len(),
+            tools = request.tools.len(),
+            "openai chat request"
+        );
         let mut payload = json!({
             "model": request.model,
             "messages": Self::map_messages(&request.messages),
@@ -468,6 +484,7 @@ impl LlmProvider for OpenAiProvider {
         let status = response.status();
         if !status.is_success() {
             let text = response.text().await.unwrap_or_default();
+            warn!(provider = "openai", %status, "openai chat api error");
             return Err(anyhow!("OpenAI API error {status}: {text}"));
         }
 
@@ -503,6 +520,12 @@ impl LlmProvider for OpenAiProvider {
     }
 
     async fn chat_stream(&self, request: LlmRequest) -> Result<LlmStream> {
+        debug!(
+            provider = "openai",
+            messages = request.messages.len(),
+            tools = request.tools.len(),
+            "openai stream request"
+        );
         let mut payload = json!({
             "model": request.model,
             "messages": Self::map_messages(&request.messages),
@@ -534,6 +557,7 @@ impl LlmProvider for OpenAiProvider {
         let status = response.status();
         if !status.is_success() {
             let text = response.text().await.unwrap_or_default();
+            warn!(provider = "openai", %status, "openai stream api error");
             return Err(anyhow!("OpenAI API stream error {status}: {text}"));
         }
 
