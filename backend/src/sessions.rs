@@ -32,7 +32,13 @@ impl SessionStore {
     }
 
     pub async fn list(&self) -> Vec<SessionState> {
-        let mut sessions = self.inner.read().await.values().cloned().collect::<Vec<_>>();
+        let mut sessions = self
+            .inner
+            .read()
+            .await
+            .values()
+            .cloned()
+            .collect::<Vec<_>>();
         sessions.sort_by(|a, b| b.updated_at.cmp(&a.updated_at));
         sessions
     }

@@ -34,7 +34,10 @@ async fn write_tool_allows_symlink_escape_targets() {
         .expect("write result");
 
     let output_file = outside.path().join("output.txt");
-    assert_eq!(std::fs::read_to_string(output_file).expect("read output"), "hello");
+    assert_eq!(
+        std::fs::read_to_string(output_file).expect("read output"),
+        "hello"
+    );
     assert!(result.output.contains("output.txt"));
 }
 
@@ -68,6 +71,9 @@ async fn edit_tool_allows_symlink_escape_targets() {
         .await
         .expect("edit result");
 
-    assert_eq!(std::fs::read_to_string(target).expect("read target"), "hello chaos");
+    assert_eq!(
+        std::fs::read_to_string(target).expect("read target"),
+        "hello chaos"
+    );
     assert!(result.output.contains("edit.txt"));
 }

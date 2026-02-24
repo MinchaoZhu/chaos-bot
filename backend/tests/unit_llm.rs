@@ -396,6 +396,8 @@ fn build_provider_mock() {
         provider: "mock".into(),
         model: "mock".into(),
         openai_api_key: None,
+        anthropic_api_key: None,
+        gemini_api_key: None,
         temperature: 0.0,
         max_tokens: 128,
         max_iterations: 1,
@@ -418,6 +420,8 @@ fn build_provider_unsupported() {
         provider: "unknown".into(),
         model: "x".into(),
         openai_api_key: None,
+        anthropic_api_key: None,
+        gemini_api_key: None,
         temperature: 0.0,
         max_tokens: 128,
         max_iterations: 1,
@@ -439,6 +443,54 @@ fn build_provider_openai_without_key_errors() {
         provider: "openai".into(),
         model: "gpt-4o".into(),
         openai_api_key: None,
+        anthropic_api_key: None,
+        gemini_api_key: None,
+        temperature: 0.0,
+        max_tokens: 128,
+        max_iterations: 1,
+        token_budget: 1024,
+        working_dir: std::path::PathBuf::from("."),
+        personality_dir: std::path::PathBuf::from("."),
+        memory_dir: std::path::PathBuf::from("."),
+        memory_file: std::path::PathBuf::from("."),
+    };
+    assert!(build_provider(&config).is_err());
+}
+
+#[test]
+fn build_provider_anthropic_without_key_errors() {
+    use chaos_bot_backend::config::AppConfig;
+    let config = AppConfig {
+        host: "0.0.0.0".into(),
+        port: 3000,
+        provider: "anthropic".into(),
+        model: "claude".into(),
+        openai_api_key: None,
+        anthropic_api_key: None,
+        gemini_api_key: None,
+        temperature: 0.0,
+        max_tokens: 128,
+        max_iterations: 1,
+        token_budget: 1024,
+        working_dir: std::path::PathBuf::from("."),
+        personality_dir: std::path::PathBuf::from("."),
+        memory_dir: std::path::PathBuf::from("."),
+        memory_file: std::path::PathBuf::from("."),
+    };
+    assert!(build_provider(&config).is_err());
+}
+
+#[test]
+fn build_provider_gemini_without_key_errors() {
+    use chaos_bot_backend::config::AppConfig;
+    let config = AppConfig {
+        host: "0.0.0.0".into(),
+        port: 3000,
+        provider: "gemini".into(),
+        model: "gemini-pro".into(),
+        openai_api_key: None,
+        anthropic_api_key: None,
+        gemini_api_key: None,
         temperature: 0.0,
         max_tokens: 128,
         max_iterations: 1,
@@ -465,6 +517,8 @@ async fn mock_provider_chat_stream_text() {
         provider: "mock".into(),
         model: "mock".into(),
         openai_api_key: None,
+        anthropic_api_key: None,
+        gemini_api_key: None,
         temperature: 0.0,
         max_tokens: 128,
         max_iterations: 1,
@@ -509,6 +563,8 @@ async fn mock_provider_chat_stream_tool_call() {
         provider: "mock".into(),
         model: "mock".into(),
         openai_api_key: None,
+        anthropic_api_key: None,
+        gemini_api_key: None,
         temperature: 0.0,
         max_tokens: 128,
         max_iterations: 1,

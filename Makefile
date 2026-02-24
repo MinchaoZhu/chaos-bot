@@ -14,7 +14,7 @@ run:
 test: test-unit test-integration
 
 test-unit:
-	cargo test --workspace \
+	bash scripts/run-test-suite.sh unit cargo test --workspace \
 		--test unit_types \
 		--test unit_sessions \
 		--test unit_memory \
@@ -28,13 +28,12 @@ test-unit:
 		--test tools_symlink
 
 test-integration:
-	cargo test --workspace \
+	bash scripts/run-test-suite.sh integration cargo test --workspace \
 		--test api_integration \
 		--test api_routes
 
 test-e2e:
-	cd e2e && test -d node_modules/@playwright/test || npm install
-	cd e2e && npx playwright test
+	bash scripts/run-test-suite.sh e2e bash scripts/run-e2e.sh
 
 test-all: test-unit test-integration test-e2e
 

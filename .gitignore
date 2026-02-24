@@ -7,7 +7,10 @@ node_modules
 frontend/.cache
 
 # Runtime-generated directories and files (anchored to repo root)
+/agent.json
+/.env.example
 /MEMORY.md
 /memory/
 /data/
 /personality/
+/.tmp/

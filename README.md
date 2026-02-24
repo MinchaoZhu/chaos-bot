@@ -11,61 +11,86 @@ chaos-bot is a personal AI agent designed to assist with everyday tasks through 
 ```bash
 make build          # cargo build -p chaos-bot-backend
 make run            # cargo run -p chaos-bot-backend
-make clean-runtime  # delete personality/, memory/, data/, MEMORY.md
+make clean-runtime  # delete runtime-generated files and .tmp
+make test-all       # unit + integration + e2e (all in .tmp, auto-cleaned)
 ```
+
+## Runtime Initialization Model
+
+Runtime config and templates are embedded into the backend binary at compile time:
+
+- `templates/config/agent.json`
+- `templates/config/.env.example`
+- `templates/MEMORY.md`
+- `templates/personality/*.md`
+
+At runtime, missing files are materialized automatically:
+
+- `agent.json`
+- `.env.example`
+- `MEMORY.md`
+- `personality/SOUL.md`
+- `personality/IDENTITY.md`
+- `personality/USER.md`
+- `personality/AGENTS.md`
+- `data/sessions/`
+
+Existing files are preserved; only missing files are generated.
+
+## Runtime Configuration (`agent.json`)
+
+`agent.json` is runtime-generated from the embedded template if missing.
+
+```json
+{
+  "server": { "host": "0.0.0.0", "port": 3000 },
+  "llm": { "provider": "openai", "model": "gpt-4o-mini" },
+  "paths": {
+    "working_dir": ".",
+    "personality_dir": "./personality",
+    "memory_dir": "./memory",
+    "memory_file": "./MEMORY.md"
+  },
+  "secrets": {}
+}
+```
+
+Priority order:
+
+1. Embedded defaults
+2. Environment secrets (`OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `GEMINI_API_KEY`)
+3. `agent.json` secrets (final override)
+
+`CHAOS_*` runtime environment variables are not used.
+You can override config path with `AGENT_CONFIG_PATH`.
+
+## Test Isolation (`.tmp`)
+
+All test suites run in dedicated `.tmp` sandboxes and are deleted after execution:
+
+- `make test-unit` -> `.tmp/unit`
+- `make test-integration` -> `.tmp/integration`
+- `make test-e2e` -> `.tmp/e2e`
+
+e2e runtime files and Playwright artifacts are also redirected into `.tmp/e2e`.
 
 ## Runtime vs Source Files
 
-The following directories and files are **runtime-generated** and must never be committed to git:
+Repository source-of-truth templates are tracked under `templates/`.
+Runtime-generated files at repo root are ignored via `.gitignore`:
 
-| Path | Description |
-|------|-------------|
-| `personality/` | Active personality files written on first boot |
-| `memory/` | Session memory logs |
-| `data/` | Session data (e.g. `data/sessions/`) |
-| `MEMORY.md` | Long-term memory file |
-
-These are all listed in `.gitignore`. If they appear in `git status`, something is wrong.
-
-## Template Prototypes
-
-Canonical templates live in `templates/` and **are** tracked by git:
-
-```
-templates/
-  personality/
-    SOUL.md
-    IDENTITY.md
-    USER.md
-    AGENTS.md
-  MEMORY.md
-```
-
-These are compiled into the binary via `include_str!` in `backend/src/bootstrap.rs`. On first
-startup, if `personality/` does not exist, the binary writes out the defaults automatically.
+- `agent.json`
+- `.env.example`
+- `MEMORY.md`
+- `memory/`
+- `personality/`
+- `data/`
+- `.tmp/`
 
 ## Cleaning Runtime Files
 
-To delete all runtime-generated files and restore a clean state:
+To delete runtime-generated files and test temporary directories:
 
 ```bash
 make clean-runtime
 ```
-
-or directly:
-
-```bash
-bash scripts/clean-runtime.sh
-```
-
-Run this before tests or CI runs to ensure startup from a known-clean state.
-
-## Modifying Personality
-
-There are two ways to change the bot's personality:
-
-1. **Edit `templates/personality/*.md`** — affects the next compiled binary and any fresh
-   deployment. Changes are tracked in git and shared with the team.
-
-2. **Edit `personality/*.md`** (runtime files) — affects the current running instance only.
-   Changes are local and not committed to git.
