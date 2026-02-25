@@ -1,11 +1,15 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import {
+  type AgentFileConfig,
   CHAT_STREAM_EVENT,
   type ChatRequest,
   type ChatStreamEnvelope,
+  type ConfigMutationResponse,
+  type ConfigStateResponse,
   type HealthResponse,
   type RuntimeError,
+  type RuntimeErrorCode,
   type SessionState,
 } from "../contracts/protocol";
 import type { RuntimeAdapter } from "./adapter";
@@ -28,6 +32,36 @@ function toRuntimeError(error: unknown): RuntimeError {
   return { code: "TAURI_INVOKE_FAILED", message: String(error) };
 }
 
+function toHttpErrorCode(status: number): RuntimeErrorCode {
+  if (status === 400) return "HTTP_BAD_REQUEST";
+  if (status === 401 || status === 403) return "HTTP_UNAUTHORIZED";
+  if (status === 404) return "HTTP_NOT_FOUND";
+  if (status >= 500) return "HTTP_SERVER_ERROR";
+  return "UNKNOWN";
+}
+
+function toNetworkError(error: unknown): RuntimeError {
+  return { code: "NETWORK_UNAVAILABLE", message: String(error) };
+}
+
+async function requestJson<T>(url: string, init?: RequestInit): Promise<T> {
+  let response: Response;
+  try {
+    response = await fetch(url, init);
+  } catch (error) {
+    throw toNetworkError(error);
+  }
+
+  if (!response.ok) {
+    throw {
+      code: toHttpErrorCode(response.status),
+      message: `${response.status} ${response.statusText}`,
+    } as RuntimeError;
+  }
+
+  return (await response.json()) as T;
+}
+
 export function createTauriAdapter(): RuntimeAdapter {
   return {
     source: "tauri",
@@ -45,6 +79,16 @@ export function createTauriAdapter(): RuntimeAdapter {
     },
     async deleteSession(baseUrl: string, sessionId: string): Promise<void> {
       await invoke("delete_session", { baseUrl, sessionId });
+    },
+    async getConfig(baseUrl: string): Promise<ConfigStateResponse> {
+      return requestJson<ConfigStateResponse>(`${baseUrl}/api/config`);
+    },
+    async applyConfig(baseUrl: string, config: AgentFileConfig): Promise<ConfigMutationResponse> {
+      return requestJson<ConfigMutationResponse>(`${baseUrl}/api/config/apply`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ config }),
+      });
     },
     async chatStream(baseUrl: string, request: ChatRequest, onEvent, onError): Promise<void> {
       const streamId = randomStreamId();

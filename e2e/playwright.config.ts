@@ -30,7 +30,7 @@ export default defineConfig({
   projects: [
     {
       name: "react-shell-desktop",
-      testMatch: /react-shell\.spec\.ts/,
+      testMatch: /.*desktop\.spec\.ts/,
       use: {
         ...devices["Desktop Chrome"],
         baseURL: shellBaseURL,
@@ -39,7 +39,7 @@ export default defineConfig({
     },
     {
       name: "react-shell-mobile",
-      testMatch: /react-shell\.spec\.ts/,
+      testMatch: /.*mobile\.spec\.ts/,
       use: {
         ...devices["Pixel 7"],
         baseURL: shellBaseURL,

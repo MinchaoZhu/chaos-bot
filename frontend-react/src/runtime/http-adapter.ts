@@ -1,6 +1,9 @@
 import type {
+  AgentFileConfig,
   ChatRequest,
   ChatStreamEnvelope,
+  ConfigMutationResponse,
+  ConfigStateResponse,
   HealthResponse,
   RuntimeError,
   RuntimeErrorCode,
@@ -77,6 +80,18 @@ async function requestWithoutBody(url: string, init?: RequestInit): Promise<void
   }
 }
 
+async function requestJsonWithBody<T>(url: string, body: unknown, init?: RequestInit): Promise<T> {
+  return requestJson<T>(url, {
+    ...init,
+    method: init?.method ?? "POST",
+    headers: {
+      "content-type": "application/json",
+      ...(init?.headers ?? {}),
+    },
+    body: JSON.stringify(body),
+  });
+}
+
 export function createHttpAdapter(): RuntimeAdapter {
   return {
     source: "http",
@@ -94,6 +109,12 @@ export function createHttpAdapter(): RuntimeAdapter {
     },
     async deleteSession(baseUrl: string, sessionId: string): Promise<void> {
       await requestWithoutBody(`${baseUrl}/api/sessions/${sessionId}`, { method: "DELETE" });
+    },
+    async getConfig(baseUrl: string): Promise<ConfigStateResponse> {
+      return requestJson<ConfigStateResponse>(`${baseUrl}/api/config`);
+    },
+    async applyConfig(baseUrl: string, config: AgentFileConfig): Promise<ConfigMutationResponse> {
+      return requestJsonWithBody<ConfigMutationResponse>(`${baseUrl}/api/config/apply`, { config });
     },
     async chatStream(baseUrl: string, request: ChatRequest, onEvent, onError): Promise<void> {
       let response: Response;
