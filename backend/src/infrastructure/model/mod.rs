@@ -1,52 +1,22 @@
-use crate::config::AppConfig;
-use crate::types::{Message, Role, ToolCall, ToolSpec, Usage};
+use crate::infrastructure::config::AppConfig;
+use crate::domain::audit;
+pub use crate::domain::ports::{
+    ModelPort as LlmProvider, ModelRequest as LlmRequest, ModelResponse as LlmResponse,
+    ModelStream as LlmStream, ModelStreamEvent as LlmStreamEvent,
+};
+use crate::domain::types::{Message, Role, ToolCall, ToolSpec, Usage};
 use anyhow::{anyhow, Context, Result};
 use async_trait::async_trait;
 use futures::{stream, Stream, StreamExt};
 use reqwest::Client;
-use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use std::collections::{HashMap, VecDeque};
 use std::pin::Pin;
 use std::sync::Arc;
 use tracing::{debug, info, warn};
 
-pub type LlmStream = Pin<Box<dyn Stream<Item = Result<LlmStreamEvent>> + Send>>;
-
 pub type ByteStream =
     Pin<Box<dyn Stream<Item = std::result::Result<bytes::Bytes, reqwest::Error>> + Send>>;
-
-#[derive(Clone, Debug)]
-pub struct LlmRequest {
-    pub model: String,
-    pub messages: Vec<Message>,
-    pub tools: Vec<ToolSpec>,
-    pub temperature: f32,
-    pub max_tokens: u32,
-}
-
-#[derive(Clone, Debug)]
-pub struct LlmResponse {
-    pub message: Message,
-    pub tool_calls: Vec<ToolCall>,
-    pub usage: Option<Usage>,
-    pub finish_reason: Option<String>,
-}
-
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct LlmStreamEvent {
-    pub delta: String,
-    pub tool_call: Option<ToolCall>,
-    pub done: bool,
-    pub usage: Option<Usage>,
-}
-
-#[async_trait]
-pub trait LlmProvider: Send + Sync {
-    fn name(&self) -> &'static str;
-    async fn chat(&self, request: LlmRequest) -> Result<LlmResponse>;
-    async fn chat_stream(&self, request: LlmRequest) -> Result<LlmStream>;
-}
 
 pub fn build_provider(config: &AppConfig) -> Result<Arc<dyn LlmProvider>> {
     match config.provider.to_lowercase().as_str() {
@@ -454,6 +424,20 @@ impl LlmProvider for OpenAiProvider {
     }
 
     async fn chat(&self, request: LlmRequest) -> Result<LlmResponse> {
+        let [system_messages, user_messages, assistant_messages, tool_messages] =
+            audit::role_counts(&request.messages);
+        tracing::info!(
+            provider = "openai",
+            model = %request.model,
+            messages = request.messages.len(),
+            message_chars = audit::total_message_chars(&request.messages),
+            tools = request.tools.len(),
+            system_messages,
+            user_messages,
+            assistant_messages,
+            tool_messages,
+            "llm request audit"
+        );
         debug!(
             provider = "openai",
             messages = request.messages.len(),
@@ -523,6 +507,20 @@ impl LlmProvider for OpenAiProvider {
     }
 
     async fn chat_stream(&self, request: LlmRequest) -> Result<LlmStream> {
+        let [system_messages, user_messages, assistant_messages, tool_messages] =
+            audit::role_counts(&request.messages);
+        tracing::info!(
+            provider = "openai",
+            model = %request.model,
+            messages = request.messages.len(),
+            message_chars = audit::total_message_chars(&request.messages),
+            tools = request.tools.len(),
+            system_messages,
+            user_messages,
+            assistant_messages,
+            tool_messages,
+            "llm request audit"
+        );
         debug!(
             provider = "openai",
             messages = request.messages.len(),

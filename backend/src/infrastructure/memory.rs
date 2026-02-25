@@ -1,40 +1,19 @@
 use anyhow::{anyhow, Result};
 use async_trait::async_trait;
 use chrono::Utc;
-use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 use tokio::fs;
 use tokio::io::AsyncWriteExt;
 use walkdir::WalkDir;
 
-use crate::runtime_assets::DEFAULT_MEMORY_MD;
+pub use crate::domain::ports::MemoryHit;
+pub use crate::domain::ports::MemoryPort as MemoryBackend;
+use crate::infrastructure::runtime_assets::DEFAULT_MEMORY_MD;
 
 #[derive(Clone, Debug)]
 pub struct MemoryStore {
     memory_dir: PathBuf,
     curated_file: PathBuf,
-}
-
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct MemoryHit {
-    pub path: String,
-    pub line: usize,
-    pub snippet: String,
-}
-
-#[async_trait]
-pub trait MemoryBackend: Send + Sync {
-    async fn search(&self, keyword: &str) -> Result<Vec<MemoryHit>>;
-    async fn append_daily_log(&self, summary: &str) -> Result<PathBuf>;
-    async fn get_file(
-        &self,
-        relative_path: &str,
-        start_line: Option<usize>,
-        end_line: Option<usize>,
-    ) -> Result<String>;
-    async fn read_curated(&self) -> Result<String>;
-    async fn write_curated(&self, content: &str) -> Result<()>;
-    async fn ensure_layout(&self) -> Result<()>;
 }
 
 impl MemoryStore {

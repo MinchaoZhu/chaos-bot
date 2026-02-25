@@ -19,16 +19,13 @@ make tauri-dev      # run Tauri v2 desktop app shell
 
 ## Tauri v2 + React (Phase 1 Foundation)
 
-The repo now includes a parallel multi-platform frontend scaffold:
+The repo uses a unified multi-platform frontend scaffold:
 
 - `frontend-react/`: Vite + React + TypeScript shell UI.
 - `src-tauri/`: Tauri v2 runtime crate and invoke command bridge.
 - Runtime contract: `frontend-react/RUNTIME_CONTRACT.md`.
 
-Current compatibility mode:
-
-- Existing backend-served static UI (`frontend/`) remains active for current test suites.
-- New Tauri + React shell uses the same backend API (`/api/*`) and SSE stream protocol.
+`frontend-react/` and Tauri shell use the same backend API (`/api/*`) and SSE stream protocol.
 
 ### Build/Run Entry Points
 
@@ -104,21 +101,108 @@ with pane switching, while reusing the same runtime contract and business action
 
 ### Packaging Matrix (Phase 3)
 
-- Packaging runbook: `docs/tauri-packaging.md`
-- Desktop chain:
-  - `make tauri-preflight`
-  - `make tauri-build-desktop`
-- Android chain:
-  - `make tauri-android-init`
-  - `make tauri-android-build`
-- iOS chain:
-  - `make tauri-ios-dev` (macOS only)
+| Target | Purpose | Command |
+|---|---|---|
+| Desktop preflight | Verify host dependencies and toolchain | `make tauri-preflight` |
+| Desktop build | Compile Tauri app without native bundling | `make tauri-build-desktop` |
+| Android init | Generate Android project (`src-tauri/gen/android`) | `make tauri-android-init` |
+| Android debug build | Build universal debug APK | `make tauri-android-build` |
+| Android dev run | Run Android dev target | `make tauri-android-dev` |
+| iOS dev run | Run iOS dev target (macOS only) | `make tauri-ios-dev` |
+
+Linux desktop prerequisites (Debian/Ubuntu typical):
+
+```bash
+sudo apt-get update
+sudo apt-get install -y \
+  libwebkit2gtk-4.1-dev \
+  libgtk-3-dev \
+  librsvg2-dev \
+  libayatana-appindicator3-dev
+```
+
+Common desktop packaging failures:
+
+- `pango-sys` / `gdk-sys` missing system libraries.
+- Missing `PKG_CONFIG_PATH` when libraries are installed in non-standard locations.
+
+Android prerequisites:
+
+- Java 21 (`JAVA_HOME` configured), Android SDK/NDK, platform tools.
+- `src-tauri/package.json` keeps Android Gradle `rustBuild*` tasks compatible by proxying `npm run tauri ...`.
+
+iOS prerequisite:
+
+- macOS + Xcode toolchain (Linux hosts cannot run iOS packaging chain).
+
+Release signing inputs must come from CI environment secrets; no signing secrets are committed to repository.
+
+Recommended CI progression:
+
+1. `make tauri-preflight` + `make tauri-build-desktop`
+2. `make tauri-android-init` + `make tauri-android-build`
+3. `make tauri-ios-dev` on macOS runner
 
 ### Build Architecture Notes (Reusable)
 
 - Tauri JS CLI is managed in `frontend-react/` (`@tauri-apps/cli` installed once there).
 - `src-tauri/package.json` provides a bridge script for Android Gradle tasks that execute `npm run tauri ...`.
 - This avoids duplicating Node dependencies inside `src-tauri/` while keeping Android `rustBuild*` tasks compatible.
+
+## Backend Architecture
+
+`README.md` is the maintained architecture and packaging reference.
+
+task-11/task-12/task-13 completion status:
+
+- Legacy backend root flat files were migrated into layered modules.
+- Runtime binary entry moved to `backend/src/runtime/bin/chaos_bot_backend.rs`.
+- LLM/tools adapters were migrated under `infrastructure::{model,tooling}`.
+
+Current backend module layout:
+
+```text
+backend/src
+  application/      # use cases (agent/chat/config/session)
+  domain/           # core models, error, audit, shared types, ports contracts
+  infrastructure/   # adapter implementations and runtime-facing infra
+    model/          # ModelPort adapters (OpenAI/Anthropic/Gemini/Mock)
+    tooling/        # ToolExecutorPort adapters (ToolRegistry + tool impls)
+  interface/        # HTTP API/router and protocol mapping
+  runtime/          # bootstrap, config runtime, app composition, binary entry
+  lib.rs            # crate module exports
+```
+
+Dependency direction (frozen):
+
+1. `interface -> application -> domain`
+2. `runtime -> {application, interface, infrastructure}`
+3. `application` only depends on `domain::ports` for model/tool/memory contracts
+4. `domain` does not depend on upper layers
+5. Cross-layer reverse dependencies are forbidden
+
+Port/adapter chain:
+
+- `application::agent` depends on `domain::ports::{ModelPort, ToolExecutorPort}` only.
+- `infrastructure::model` acts as `ModelPort` adapters (OpenAI/Anthropic/Gemini/Mock).
+- `infrastructure::tooling::ToolRegistry` acts as `ToolExecutorPort` adapter.
+- `runtime` composes and injects concrete adapters into `AgentLoop`.
+
+Request/runtime flow:
+
+1. `runtime/bin/chaos_bot_backend.rs` loads config, initializes logging, and picks restart mode.
+2. `runtime::build_app_with_config_runtime` composes `AgentLoop`, `ConfigRuntime`, and shared `AppState`.
+3. `interface::api::router` builds the Axum router and binds handlers.
+4. `interface::http` maps HTTP/SSE payloads to `application` commands.
+5. `application` calls `domain` models and delegates concrete IO to `infrastructure`.
+
+Startup sequence (high level):
+
+1. Load `~/.chaos-bot/config.json` (or legacy `agent.json`) from `infrastructure::config`.
+2. Initialize daily log file and retention cleanup via `infrastructure::logging`.
+3. Bootstrap workspace personality/memory/session directories via `runtime::bootstrap`.
+4. Build provider (`infrastructure::model`), tool registry (`infrastructure::tooling`), and agent loop (`application::agent`).
+5. Start Axum server and serve `/api/*` and UI static assets.
 
 ## Runtime Workspace
 
@@ -229,7 +313,6 @@ e2e runtime files and Playwright artifacts are also redirected into `.tmp/e2e`.
 
 Current e2e matrix (`make test-e2e`):
 
-- `legacy-ui`: existing backend-served static frontend regression suite.
 - `react-shell-desktop`: React shell desktop landscape flow.
 - `react-shell-mobile`: React shell mobile portrait flow (Playwright device emulation).
 

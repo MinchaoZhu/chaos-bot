@@ -1,5 +1,5 @@
-use crate::memory::MemoryBackend;
-use crate::types::{ToolExecution, ToolResult, ToolSpec};
+use crate::domain::ports::{ToolExecutionContext, ToolExecutorPort};
+use crate::domain::types::{ToolExecution, ToolResult, ToolSpec};
 use anyhow::{anyhow, Context, Result};
 use async_trait::async_trait;
 use serde_json::{json, Value};
@@ -11,17 +11,7 @@ use tokio::io::AsyncWriteExt;
 use tokio::process::Command;
 use walkdir::WalkDir;
 
-#[derive(Clone)]
-pub struct ToolContext {
-    pub root_dir: PathBuf,
-    pub memory: Arc<dyn MemoryBackend>,
-}
-
-impl ToolContext {
-    pub fn new(root_dir: PathBuf, memory: Arc<dyn MemoryBackend>) -> Self {
-        Self { root_dir, memory }
-    }
-}
+pub type ToolContext = ToolExecutionContext;
 
 #[async_trait]
 pub trait Tool: Send + Sync {
@@ -111,6 +101,23 @@ impl ToolRegistry {
             output: output.output,
             is_error: output.is_error,
         })
+    }
+}
+
+#[async_trait]
+impl ToolExecutorPort for ToolRegistry {
+    fn specs(&self) -> Vec<ToolSpec> {
+        ToolRegistry::specs(self)
+    }
+
+    async fn execute(
+        &self,
+        tool_call_id: &str,
+        name: &str,
+        args: Value,
+        context: &ToolExecutionContext,
+    ) -> Result<ToolResult> {
+        self.dispatch(tool_call_id, name, args, context).await
     }
 }
 

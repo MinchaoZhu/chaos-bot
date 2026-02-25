@@ -5,7 +5,7 @@ use tracing_appender::non_blocking::{NonBlocking, WorkerGuard};
 use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
 
-use crate::config::AppConfig;
+use crate::infrastructure::config::AppConfig;
 
 pub struct LoggingRuntime {
     _guard: WorkerGuard,

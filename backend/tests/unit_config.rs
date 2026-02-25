@@ -1,4 +1,4 @@
-use chaos_bot_backend::config::{
+use chaos_bot_backend::infrastructure::config::{
     default_config_path_for_workspace, default_workspace_path, AgentFileConfig, AgentLlmConfig,
     AgentLoggingConfig, AgentSecretsConfig, AgentServerConfig, AppConfig, EnvSecrets,
 };

@@ -1,5 +1,5 @@
-use chaos_bot_backend::memory::{MemoryBackend, MemoryStore};
-use chaos_bot_backend::tools::*;
+use chaos_bot_backend::infrastructure::memory::{MemoryBackend, MemoryStore};
+use chaos_bot_backend::infrastructure::tooling::*;
 use serde_json::json;
 use std::sync::Arc;
 use tempfile::tempdir;

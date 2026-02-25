@@ -1,5 +1,5 @@
-use chaos_bot_backend::sessions::SessionStore;
-use chaos_bot_backend::types::Message;
+use chaos_bot_backend::infrastructure::session_store::SessionStore;
+use chaos_bot_backend::domain::types::Message;
 
 #[tokio::test]
 async fn create_returns_unique_session() {
@@ -67,7 +67,7 @@ async fn upsert_updates_existing_session() {
 #[tokio::test]
 async fn upsert_inserts_new_session() {
     let store = SessionStore::new();
-    let s = chaos_bot_backend::types::SessionState::new("custom-id");
+    let s = chaos_bot_backend::domain::types::SessionState::new("custom-id");
     store.upsert(s).await;
     let found = store.get("custom-id").await;
     assert!(found.is_some());

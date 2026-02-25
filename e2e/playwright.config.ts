@@ -29,14 +29,6 @@ export default defineConfig({
   },
   projects: [
     {
-      name: "legacy-ui",
-      testMatch: /chat\.spec\.ts/,
-      use: {
-        ...devices["Desktop Chrome"],
-        baseURL: backendBaseURL,
-      },
-    },
-    {
       name: "react-shell-desktop",
       testMatch: /react-shell\.spec\.ts/,
       use: {

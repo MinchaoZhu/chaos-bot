@@ -1,5 +1,5 @@
-use chaos_bot_backend::llm::*;
-use chaos_bot_backend::types::*;
+use chaos_bot_backend::infrastructure::model::*;
+use chaos_bot_backend::domain::types::*;
 use serde_json::json;
 use std::collections::{HashMap, VecDeque};
 
@@ -389,7 +389,7 @@ fn flush_tool_calls_invalid_json_args_wrapped() {
 
 #[test]
 fn build_provider_mock() {
-    use chaos_bot_backend::config::AppConfig;
+    use chaos_bot_backend::infrastructure::config::AppConfig;
     let config = AppConfig {
         host: "0.0.0.0".into(),
         port: 3000,
@@ -418,7 +418,7 @@ fn build_provider_mock() {
 
 #[test]
 fn build_provider_unsupported() {
-    use chaos_bot_backend::config::AppConfig;
+    use chaos_bot_backend::infrastructure::config::AppConfig;
     let config = AppConfig {
         host: "0.0.0.0".into(),
         port: 3000,
@@ -446,7 +446,7 @@ fn build_provider_unsupported() {
 
 #[test]
 fn build_provider_openai_without_key_errors() {
-    use chaos_bot_backend::config::AppConfig;
+    use chaos_bot_backend::infrastructure::config::AppConfig;
     let config = AppConfig {
         host: "0.0.0.0".into(),
         port: 3000,
@@ -474,7 +474,7 @@ fn build_provider_openai_without_key_errors() {
 
 #[test]
 fn build_provider_anthropic_without_key_errors() {
-    use chaos_bot_backend::config::AppConfig;
+    use chaos_bot_backend::infrastructure::config::AppConfig;
     let config = AppConfig {
         host: "0.0.0.0".into(),
         port: 3000,
@@ -502,7 +502,7 @@ fn build_provider_anthropic_without_key_errors() {
 
 #[test]
 fn build_provider_gemini_without_key_errors() {
-    use chaos_bot_backend::config::AppConfig;
+    use chaos_bot_backend::infrastructure::config::AppConfig;
     let config = AppConfig {
         host: "0.0.0.0".into(),
         port: 3000,
@@ -536,7 +536,7 @@ fn build_provider_gemini_without_key_errors() {
 async fn mock_provider_chat_stream_text() {
     use futures::StreamExt;
 
-    let config = chaos_bot_backend::config::AppConfig {
+    let config = chaos_bot_backend::infrastructure::config::AppConfig {
         host: "0.0.0.0".into(),
         port: 3000,
         provider: "mock".into(),
@@ -587,7 +587,7 @@ async fn mock_provider_chat_stream_text() {
 async fn mock_provider_chat_stream_tool_call() {
     use futures::StreamExt;
 
-    let config = chaos_bot_backend::config::AppConfig {
+    let config = chaos_bot_backend::infrastructure::config::AppConfig {
         host: "0.0.0.0".into(),
         port: 3000,
         provider: "mock".into(),

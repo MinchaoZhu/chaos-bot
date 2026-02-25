@@ -1,7 +1,7 @@
 #![cfg(unix)]
 
-use chaos_bot_backend::memory::MemoryStore;
-use chaos_bot_backend::tools::{EditTool, Tool, ToolContext, WriteTool};
+use chaos_bot_backend::infrastructure::memory::MemoryStore;
+use chaos_bot_backend::infrastructure::tooling::{EditTool, Tool, ToolContext, WriteTool};
 use serde_json::json;
 use std::os::unix::fs::symlink;
 use std::sync::Arc;
