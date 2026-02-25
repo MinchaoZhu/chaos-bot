@@ -4,6 +4,9 @@ import {
   CHAT_STREAM_EVENT,
   type ChatRequest,
   type ChatStreamEnvelope,
+  type ConfigMutationRequest,
+  type ConfigMutationResponse,
+  type ConfigStateResponse,
   type HealthResponse,
   type RuntimeError,
   type SessionState,
@@ -45,6 +48,18 @@ export function createTauriAdapter(): RuntimeAdapter {
     },
     async deleteSession(baseUrl: string, sessionId: string): Promise<void> {
       await invoke("delete_session", { baseUrl, sessionId });
+    },
+    async getConfig(baseUrl: string): Promise<ConfigStateResponse> {
+      return invoke<ConfigStateResponse>("get_config", { baseUrl });
+    },
+    async applyConfig(baseUrl: string, payload: ConfigMutationRequest): Promise<ConfigMutationResponse> {
+      return invoke<ConfigMutationResponse>("apply_config", { baseUrl, request: payload });
+    },
+    async resetConfig(baseUrl: string): Promise<ConfigMutationResponse> {
+      return invoke<ConfigMutationResponse>("reset_config", { baseUrl });
+    },
+    async restartConfig(baseUrl: string, payload?: ConfigMutationRequest): Promise<ConfigMutationResponse> {
+      return invoke<ConfigMutationResponse>("restart_config", { baseUrl, request: payload ?? {} });
     },
     async chatStream(baseUrl: string, request: ChatRequest, onEvent, onError): Promise<void> {
       const streamId = randomStreamId();

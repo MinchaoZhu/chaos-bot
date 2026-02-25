@@ -227,7 +227,42 @@ button[aria-disabled="true"] {
 .chat-main {
   display: grid;
   gap: 0.95rem;
-  grid-template-rows: minmax(380px, 1fr) minmax(180px, auto);
+}
+
+.chat-main.desktop {
+  grid-template-columns: minmax(0, 1fr) minmax(300px, 420px);
+  align-items: stretch;
+}
+
+.chat-main.mobile {
+  grid-template-columns: 1fr;
+}
+
+.side-pane {
+  display: grid;
+  gap: 0.6rem;
+  grid-template-rows: auto minmax(0, 1fr);
+}
+
+.pane-tabs {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.35rem;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 0.3rem;
+  background: rgba(255, 255, 255, 0.72);
+}
+
+.pane-tabs button {
+  background: rgba(255, 255, 255, 0.48);
+  color: var(--ink);
+  border: 1px solid transparent;
+}
+
+.pane-tabs button.active {
+  border-color: rgba(15, 122, 104, 0.42);
+  background: rgba(15, 122, 104, 0.16);
 }
 
 .panel {
@@ -296,6 +331,60 @@ button[aria-disabled="true"] {
   background: rgba(255, 255, 255, 0.8);
 }
 
+.config-panel {
+  display: grid;
+  gap: 0.6rem;
+  align-content: start;
+}
+
+.config-meta {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.5rem;
+}
+
+.config-meta p {
+  margin: 0;
+  padding: 0.45rem 0.55rem;
+  border: 1px dashed var(--line);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.82);
+  color: var(--ink-soft);
+}
+
+.config-meta strong {
+  color: var(--ink);
+}
+
+.config-editor {
+  width: 100%;
+  min-height: 220px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 0.55rem 0.62rem;
+  background: rgba(255, 255, 255, 0.9);
+  font-family: "IBM Plex Mono", "JetBrains Mono", monospace;
+  font-size: 0.82rem;
+  line-height: 1.45;
+}
+
+.config-actions {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.45rem;
+}
+
+.config-status {
+  margin: 0;
+  padding: 0.45rem 0.55rem;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.82);
+  color: var(--ink-soft);
+  font-family: "IBM Plex Mono", "JetBrains Mono", monospace;
+  font-size: 0.81rem;
+}
+
 .runtime-error {
   margin-top: 0.55rem;
   border: 1px solid rgba(188, 75, 58, 0.4);
@@ -307,7 +396,7 @@ button[aria-disabled="true"] {
 
 .mobile-tabs {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 0.4rem;
   background: rgba(255, 255, 255, 0.72);
   border: 1px solid var(--line);
@@ -345,7 +434,7 @@ button[aria-disabled="true"] {
   }
 
   .chat-main {
-    grid-template-rows: auto;
+    grid-template-columns: 1fr;
   }
 
   .messages {
@@ -353,6 +442,19 @@ button[aria-disabled="true"] {
   }
 
   .composer {
+    grid-template-columns: 1fr;
+  }
+
+  .config-meta,
+  .config-actions {
+    grid-template-columns: 1fr;
+  }
+
+  .config-editor {
+    min-height: 200px;
+  }
+
+  .pane-tabs {
     grid-template-columns: 1fr;
   }
 

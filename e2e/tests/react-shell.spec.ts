@@ -20,6 +20,28 @@ async function sendAndAssertConversation(page: Page, message: string) {
   );
 }
 
+async function assertConfigTabFlow(page: Page, mode: "desktop" | "mobile") {
+  if (mode === "desktop") {
+    await page.getByRole("button", { name: "Config" }).click();
+  } else {
+    const configTab = page.getByRole("button", { name: "config" });
+    await configTab.scrollIntoViewIfNeeded();
+    await configTab.click({ force: true });
+  }
+
+  await expect(page.getByRole("heading", { name: "Runtime Config" })).toBeVisible();
+  await expect(page.getByTestId("config-raw-editor")).toContainText('"llm"');
+
+  await page.getByRole("button", { name: "Apply Config" }).click();
+  await expect(page.locator(".config-status")).toContainText("apply ok");
+
+  await page.getByRole("button", { name: "Reset Config" }).click();
+  await expect(page.locator(".config-status")).toContainText("reset ok");
+
+  await page.getByRole("button", { name: "Restart Runtime" }).click();
+  await expect(page.locator(".config-status")).toContainText("restart ok");
+}
+
 test("react shell desktop layout supports full flow", async ({ page }, testInfo) => {
   test.skip(!testInfo.project.name.includes("desktop"), "desktop project only");
 
@@ -37,6 +59,7 @@ test("react shell desktop layout supports full flow", async ({ page }, testInfo)
   await sendAndAssertConversation(page, message);
 
   await expect(page.locator(".event-panel")).toContainText(`[request] ${message}`);
+  await assertConfigTabFlow(page, "desktop");
 });
 
 test("react shell mobile layout supports pane switching flow", async ({ page }, testInfo) => {
@@ -55,4 +78,6 @@ test("react shell mobile layout supports pane switching flow", async ({ page }, 
 
   await page.getByRole("button", { name: "events" }).click();
   await expect(page.locator(".event-panel")).toContainText(`[request] ${message}`);
+
+  await assertConfigTabFlow(page, "mobile");
 });

@@ -302,6 +302,7 @@ impl Tool for WriteTool {
                 .open(&resolved)
                 .await?;
             file.write_all(content.as_bytes()).await?;
+            file.flush().await?;
         } else {
             fs::write(&resolved, content).await?;
         }

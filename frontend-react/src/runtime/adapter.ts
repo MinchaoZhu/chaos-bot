@@ -1,6 +1,9 @@
 import type {
   ChatRequest,
   ChatStreamEnvelope,
+  ConfigMutationRequest,
+  ConfigMutationResponse,
+  ConfigStateResponse,
   HealthResponse,
   RuntimeError,
   SessionState,
@@ -13,6 +16,10 @@ export interface RuntimeAdapter {
   createSession(baseUrl: string): Promise<SessionState>;
   getSession(baseUrl: string, sessionId: string): Promise<SessionState>;
   deleteSession(baseUrl: string, sessionId: string): Promise<void>;
+  getConfig(baseUrl: string): Promise<ConfigStateResponse>;
+  applyConfig(baseUrl: string, payload: ConfigMutationRequest): Promise<ConfigMutationResponse>;
+  resetConfig(baseUrl: string): Promise<ConfigMutationResponse>;
+  restartConfig(baseUrl: string, payload?: ConfigMutationRequest): Promise<ConfigMutationResponse>;
   chatStream(
     baseUrl: string,
     request: ChatRequest,

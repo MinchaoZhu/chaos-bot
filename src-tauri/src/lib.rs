@@ -1,7 +1,7 @@
 use futures_util::StreamExt;
 use reqwest::StatusCode;
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
+use serde_json::{json, Value};
 use tauri::Emitter;
 
 const CHAT_STREAM_EVENT: &str = "chaos://chat-event";
@@ -49,6 +49,32 @@ struct SessionState {
     updated_at: String,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct ConfigStateResponse {
+    config_path: String,
+    backup1_path: String,
+    backup2_path: String,
+    config_format: String,
+    running: Value,
+    disk: Value,
+    raw: String,
+    disk_parse_error: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct ConfigMutationResponse {
+    ok: bool,
+    action: String,
+    restart_scheduled: bool,
+    state: ConfigStateResponse,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+struct ConfigMutationRequest {
+    raw: Option<String>,
+    config: Option<Value>,
+}
+
 #[derive(Debug, Clone, Serialize)]
 struct ChatStreamEnvelope {
     stream_id: String,
@@ -73,6 +99,27 @@ fn map_status_error(status: StatusCode) -> RuntimeError {
 
 async fn get_json<T: for<'de> Deserialize<'de>>(url: String) -> Result<T, RuntimeError> {
     let response = reqwest::get(url)
+        .await
+        .map_err(|error| RuntimeError::new("NETWORK_UNAVAILABLE", error.to_string()))?;
+
+    if !response.status().is_success() {
+        return Err(map_status_error(response.status()));
+    }
+
+    response
+        .json::<T>()
+        .await
+        .map_err(|error| RuntimeError::new("UNKNOWN", error.to_string()))
+}
+
+async fn post_json<T: for<'de> Deserialize<'de>, B: Serialize>(
+    url: String,
+    body: &B,
+) -> Result<T, RuntimeError> {
+    let response = reqwest::Client::new()
+        .post(url)
+        .json(body)
+        .send()
         .await
         .map_err(|error| RuntimeError::new("NETWORK_UNAVAILABLE", error.to_string()))?;
 
@@ -140,6 +187,45 @@ async fn delete_session(base_url: String, session_id: String) -> Result<(), Runt
     }
 
     Ok(())
+}
+
+#[tauri::command]
+async fn get_config(base_url: String) -> Result<ConfigStateResponse, RuntimeError> {
+    get_json(format!("{}/api/config", normalize_base_url(&base_url))).await
+}
+
+#[tauri::command]
+async fn apply_config(
+    base_url: String,
+    request: ConfigMutationRequest,
+) -> Result<ConfigMutationResponse, RuntimeError> {
+    post_json(
+        format!("{}/api/config/apply", normalize_base_url(&base_url)),
+        &request,
+    )
+    .await
+}
+
+#[tauri::command]
+async fn reset_config(base_url: String) -> Result<ConfigMutationResponse, RuntimeError> {
+    post_json(
+        format!("{}/api/config/reset", normalize_base_url(&base_url)),
+        &json!({}),
+    )
+    .await
+}
+
+#[tauri::command]
+async fn restart_config(
+    base_url: String,
+    request: Option<ConfigMutationRequest>,
+) -> Result<ConfigMutationResponse, RuntimeError> {
+    let payload = request.unwrap_or_default();
+    post_json(
+        format!("{}/api/config/restart", normalize_base_url(&base_url)),
+        &payload,
+    )
+    .await
 }
 
 fn parse_sse_block(block: &str) -> Option<(String, Value)> {
@@ -236,6 +322,10 @@ pub fn run() {
             create_session,
             get_session,
             delete_session,
+            get_config,
+            apply_config,
+            reset_config,
+            restart_config,
             chat_stream
         ])
         .run(tauri::generate_context!())

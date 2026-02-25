@@ -74,6 +74,22 @@ fn map_tools_single() {
 }
 
 // -------------------------------------------------------------------------
+// token_limit_field
+// -------------------------------------------------------------------------
+
+#[test]
+fn token_limit_field_for_gpt5_models() {
+    let field = OpenAiProvider::token_limit_field("gpt-5.2");
+    assert_eq!(field, "max_completion_tokens");
+}
+
+#[test]
+fn token_limit_field_for_non_gpt5_models() {
+    let field = OpenAiProvider::token_limit_field("gpt-4o-mini");
+    assert_eq!(field, "max_tokens");
+}
+
+// -------------------------------------------------------------------------
 // parse_usage
 // -------------------------------------------------------------------------
 

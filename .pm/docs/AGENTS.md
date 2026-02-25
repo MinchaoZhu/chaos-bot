@@ -4,8 +4,8 @@
 - Project: bot
 - Main Repository: /home/debian/projects/chaos-bot
 - Branch: feat/bot
-- Active Task: task-13
-- Last Updated: 2026-02-25T14:47:48+08:00
+- Active Task: task-14
+- Last Updated: 2026-02-25T15:18:21+08:00
 
 ## Task Index
 - task-1: done
@@ -21,8 +21,14 @@
 - task-11: done
 - task-12: done
 - task-13: done
+- task-14: done
 
 ## Verification
+- `task-14` 已完成：React Shell 增加 Config Tab（desktop 右侧 Events/Config 切换 + mobile config pane），并接入 `/api/config*` 全链路（http/tauri）。
+- `npm --prefix frontend-react run build` passed.
+- `cargo check --manifest-path src-tauri/Cargo.toml` passed.
+- `make test-e2e` passed (Playwright 2 passed, 2 skipped; includes config tab desktop/mobile flow).
+- `make test-all` passed (unit + integration + e2e, task-14 completion gate).
 - `task-13` 后续收敛已完成：删除根级 `docs/` 与旧 `frontend/`，仅保留 `frontend-react/`。
 - `cargo test --workspace --test api_routes --test api_integration` passed (10/10).
 - `make test-e2e` passed (Playwright 2 passed, 2 skipped; react-shell desktop/mobile).
@@ -118,10 +124,11 @@
 - `.pm/bot/task-11.md`: Agent 后端模块化架构重构计划（已完成，legacy 平铺文件全量迁移）。
 - `.pm/bot/task-12.md`: LLM/Tools 端口化下沉重构计划（已完成）。
 - `.pm/bot/task-13.md`: LLM/Tools 下沉 + README 文档收敛 + DDD 治理约束重构计划。
+- `.pm/bot/task-14.md`: React Shell 增加 Config Tab 任务计划与执行记录（已完成）。
 - `AGENTS.md`: Shared runtime status, task index, and verification summary.
 - `CLAUDE.md`: Symlink to `AGENTS.md`.
 
 ## Next Actions
-1. 规划 `task-14`（如需新增功能）并确保继续遵守 DDD 边界与 README 单一文档入口。
-2. 如需继续收敛 e2e，可拆分 desktop/mobile spec 以去除跨项目 `skip`。
-3. 持续以 `make test-all` 作为所有后续任务完成门禁。
+1. 规划 `task-15`（可选）：将 Config 编辑升级为结构化表单 + raw 双向同步。
+2. 补充 config 错误场景 e2e（invalid JSON / 400 payload）以覆盖负路径。
+3. 持续以 `make test-all` 作为后续任务完成门禁。
