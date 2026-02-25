@@ -149,3 +149,14 @@ export interface ChatStreamEnvelope {
   event: StreamEventType;
   data: unknown;
 }
+
+export interface SkillMeta {
+  id: string;
+  name: string;
+  description: string;
+}
+
+export interface SkillDetail {
+  meta: SkillMeta;
+  body: string;
+}

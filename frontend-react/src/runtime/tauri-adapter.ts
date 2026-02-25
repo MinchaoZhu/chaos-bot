@@ -12,6 +12,8 @@ import {
   type RuntimeError,
   type RuntimeErrorCode,
   type SessionState,
+  type SkillDetail,
+  type SkillMeta,
 } from "../contracts/protocol";
 import type { RuntimeAdapter } from "./adapter";
 
@@ -106,6 +108,12 @@ export function createTauriAdapter(): RuntimeAdapter {
     },
     async deleteSession(baseUrl: string, sessionId: string): Promise<void> {
       await invoke("delete_session", { baseUrl, sessionId });
+    },
+    async listSkills(baseUrl: string): Promise<SkillMeta[]> {
+      return invoke<SkillMeta[]>("list_skills", { baseUrl });
+    },
+    async getSkill(baseUrl: string, skillId: string): Promise<SkillDetail> {
+      return invoke<SkillDetail>("get_skill", { baseUrl, skillId });
     },
     async chatStream(baseUrl: string, request: ChatRequest, onEvent, onError): Promise<void> {
       const streamId = randomStreamId();

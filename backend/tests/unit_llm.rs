@@ -23,6 +23,7 @@ fn test_app_config(provider: &str, model: &str) -> AppConfig {
     config.personality_dir = std::path::PathBuf::from(".");
     config.memory_dir = std::path::PathBuf::from(".");
     config.memory_file = std::path::PathBuf::from(".");
+    config.skills_dir = std::path::PathBuf::from(".");
     config
 }
 

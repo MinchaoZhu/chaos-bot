@@ -9,6 +9,8 @@ import type {
   RuntimeError,
   RuntimeErrorCode,
   SessionState,
+  SkillDetail,
+  SkillMeta,
   StreamEventType,
 } from "../contracts/protocol";
 import type { RuntimeAdapter } from "./adapter";
@@ -125,6 +127,12 @@ export function createHttpAdapter(): RuntimeAdapter {
     },
     async deleteSession(baseUrl: string, sessionId: string): Promise<void> {
       await requestWithoutBody(`${baseUrl}/api/sessions/${sessionId}`, { method: "DELETE" });
+    },
+    async listSkills(baseUrl: string): Promise<SkillMeta[]> {
+      return requestJson<SkillMeta[]>(`${baseUrl}/api/skills`);
+    },
+    async getSkill(baseUrl: string, skillId: string): Promise<SkillDetail> {
+      return requestJson<SkillDetail>(`${baseUrl}/api/skills/${skillId}`);
     },
     async chatStream(baseUrl: string, request: ChatRequest, onEvent, onError): Promise<void> {
       let response: Response;

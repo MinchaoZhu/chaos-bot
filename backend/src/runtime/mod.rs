@@ -8,7 +8,7 @@ use tokio::time::{sleep, Duration};
 
 use crate::application::ChatService;
 use crate::application::agent::{AgentConfig, AgentLoop};
-use crate::domain::ports::{MemoryPort, ToolExecutorPort};
+use crate::domain::ports::{MemoryPort, SkillPort, ToolExecutorPort};
 use crate::interface::api::AppState;
 use crate::infrastructure::channels::build_dispatcher;
 use crate::infrastructure::channels::telegram::poll_updates_once;
@@ -18,6 +18,7 @@ use crate::runtime::config_runtime::{AgentFactory, ConfigRuntime, RestartMode};
 use crate::infrastructure::model;
 use crate::infrastructure::memory::MemoryStore;
 use crate::infrastructure::personality::{PersonalityLoader, PersonalitySource};
+use crate::infrastructure::skills::SkillStore;
 use crate::infrastructure::tooling::ToolRegistry;
 
 struct BackendAgentFactory;
@@ -32,6 +33,7 @@ impl AgentFactory for BackendAgentFactory {
 pub async fn build_app(config: &AppConfig) -> Result<AppState> {
     let agent = build_agent_loop(config).await?;
     let channel_dispatcher = build_dispatcher(config).await?;
+    let skills: Arc<dyn SkillPort> = Arc::new(SkillStore::new(config.skills_dir.clone()));
     let state = AppState::new(
         agent,
         channel_dispatcher,
@@ -39,7 +41,8 @@ pub async fn build_app(config: &AppConfig) -> Result<AppState> {
         config.telegram_enabled,
         config.telegram_polling,
         config.telegram_api_base_url.clone(),
-    );
+    )
+    .with_skills(skills);
     maybe_spawn_telegram_poller(state.clone(), config);
     Ok(state)
 }
@@ -66,6 +69,7 @@ pub async fn build_app_with_config_runtime(
         restart_mode,
     ));
 
+    let skills: Arc<dyn SkillPort> = Arc::new(SkillStore::new(config.skills_dir.clone()));
     let state = AppState::with_config_runtime(
         agent_slot,
         runtime,
@@ -74,7 +78,8 @@ pub async fn build_app_with_config_runtime(
         config.telegram_enabled,
         config.telegram_polling,
         config.telegram_api_base_url.clone(),
-    );
+    )
+    .with_skills(skills);
     maybe_spawn_telegram_poller(state.clone(), config);
     Ok(state)
 }
@@ -97,11 +102,15 @@ pub async fn build_agent_loop(config: &AppConfig) -> Result<Arc<AgentLoop>> {
     registry.register_default_tools();
     let tools: Arc<dyn ToolExecutorPort> = Arc::new(registry);
 
+    let skills: Arc<dyn SkillPort> = Arc::new(SkillStore::new(config.skills_dir.clone()));
+    skills.ensure_layout().await?;
+
     Ok(Arc::new(AgentLoop::new(
         provider,
         tools,
         personality,
         memory,
+        skills,
         AgentConfig::from(config),
     )))
 }

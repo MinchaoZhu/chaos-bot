@@ -5,11 +5,14 @@ use crate::domain::ports::ChannelDispatcherPort;
 use crate::domain::config::{
     ConfigMutationInput, ConfigMutationResponse, ConfigRestartInput, ConfigStateResponse,
 };
+use crate::infrastructure::config::AgentFileConfig;
+use crate::domain::ports::SkillPort;
+use crate::domain::skills::{SkillDetail, SkillMeta};
 use crate::domain::AppError;
 use crate::domain::types::SessionState;
 use crate::infrastructure::channels::telegram::TelegramWebhookUpdate;
-use crate::infrastructure::config::AgentFileConfig;
 use crate::infrastructure::session_store::SessionStore;
+use crate::infrastructure::skills::EmptySkillStore;
 use crate::runtime::config_runtime::ConfigRuntime;
 use axum::http::HeaderMap;
 use axum::extract::{Path, State};
@@ -36,6 +39,7 @@ pub struct AppState {
     pub telegram_enabled: bool,
     pub telegram_polling: bool,
     pub telegram_api_base_url: String,
+    pub skills: Arc<dyn SkillPort>,
 }
 
 impl AppState {
@@ -56,6 +60,7 @@ impl AppState {
             telegram_enabled,
             telegram_polling,
             telegram_api_base_url,
+            skills: Arc::new(EmptySkillStore),
         }
     }
 
@@ -77,7 +82,13 @@ impl AppState {
             telegram_enabled,
             telegram_polling,
             telegram_api_base_url,
+            skills: Arc::new(EmptySkillStore),
         }
+    }
+
+    pub fn with_skills(mut self, skills: Arc<dyn SkillPort>) -> Self {
+        self.skills = skills;
+        self
     }
 
     pub async fn current_agent(&self) -> Arc<AgentLoop> {
@@ -137,6 +148,8 @@ pub fn router(state: AppState) -> Router {
         .route("/api/config/reset", post(reset_config))
         .route("/api/config/apply", post(apply_config))
         .route("/api/config/restart", post(restart_config))
+        .route("/api/skills", get(list_skills))
+        .route("/api/skills/:id", get(get_skill))
         .with_state(state)
 }
 
@@ -353,6 +366,27 @@ async fn restart_config(
     };
 
     Ok(Json(service.restart(input).await?))
+}
+
+async fn list_skills(State(state): State<AppState>) -> Result<Json<Vec<SkillMeta>>, AppError> {
+    let skills = state
+        .skills
+        .list()
+        .await
+        .map_err(|e| AppError::internal(e.to_string()))?;
+    Ok(Json(skills))
+}
+
+async fn get_skill(
+    Path(id): Path<String>,
+    State(state): State<AppState>,
+) -> Result<Json<SkillDetail>, AppError> {
+    let skill = state
+        .skills
+        .get(&id)
+        .await
+        .map_err(|_| AppError::not_found("skill not found"))?;
+    Ok(Json(skill))
 }
 
 fn chat_event_to_sse(event: ChatEvent) -> Event {

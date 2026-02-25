@@ -6,4 +6,5 @@ pub mod personality;
 pub mod runtime_assets;
 pub mod session_store;
 pub mod model;
+pub mod skills;
 pub mod tooling;

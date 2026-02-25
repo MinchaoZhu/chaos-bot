@@ -1,11 +1,11 @@
-export type MobilePane = "chat" | "sessions" | "events" | "config";
+export type MobilePane = "chat" | "sessions" | "events" | "config" | "skills";
 
 type MobilePaneTabsProps = {
   activePane: MobilePane;
   onChange: (pane: MobilePane) => void;
 };
 
-const PANES: MobilePane[] = ["chat", "sessions", "events", "config"];
+const PANES: MobilePane[] = ["chat", "sessions", "events", "config", "skills"];
 
 export function MobilePaneTabs({ activePane, onChange }: MobilePaneTabsProps) {
   return (
