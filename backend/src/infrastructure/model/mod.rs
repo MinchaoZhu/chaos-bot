@@ -197,6 +197,15 @@ pub struct OpenAiStreamState {
 }
 
 impl OpenAiProvider {
+    pub fn token_limit_field(model: &str) -> &'static str {
+        let model = model.to_ascii_lowercase();
+        if model.starts_with("gpt-5") {
+            "max_completion_tokens"
+        } else {
+            "max_tokens"
+        }
+    }
+
     pub fn new(api_key: String) -> Self {
         Self {
             client: Client::new(),
@@ -444,12 +453,13 @@ impl LlmProvider for OpenAiProvider {
             tools = request.tools.len(),
             "openai chat request"
         );
+        let token_limit_field = Self::token_limit_field(&request.model);
         let mut payload = json!({
             "model": request.model,
             "messages": Self::map_messages(&request.messages),
             "temperature": request.temperature,
-            "max_tokens": request.max_tokens,
         });
+        payload[token_limit_field] = json!(request.max_tokens);
 
         if !request.tools.is_empty() {
             payload["tools"] = json!(Self::map_tools(&request.tools));
@@ -527,16 +537,17 @@ impl LlmProvider for OpenAiProvider {
             tools = request.tools.len(),
             "openai stream request"
         );
+        let token_limit_field = Self::token_limit_field(&request.model);
         let mut payload = json!({
             "model": request.model,
             "messages": Self::map_messages(&request.messages),
             "temperature": request.temperature,
-            "max_tokens": request.max_tokens,
             "stream": true,
             "stream_options": {
                 "include_usage": true
             }
         });
+        payload[token_limit_field] = json!(request.max_tokens);
 
         if !request.tools.is_empty() {
             payload["tools"] = json!(Self::map_tools(&request.tools));

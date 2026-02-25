@@ -3,6 +3,7 @@ import type {
   ChannelStatusResponse,
   ChatRequest,
   ChatStreamEnvelope,
+  ConfigMutationRequest,
   ConfigMutationResponse,
   ConfigStateResponse,
   HealthResponse,
@@ -21,7 +22,7 @@ export interface RuntimeAdapter {
   getConfig(baseUrl: string): Promise<ConfigStateResponse>;
   applyConfig(baseUrl: string, config: AgentFileConfig): Promise<ConfigMutationResponse>;
   resetConfig(baseUrl: string): Promise<ConfigMutationResponse>;
-  restartConfig(baseUrl: string, config?: AgentFileConfig): Promise<ConfigMutationResponse>;
+  restartConfig(baseUrl: string, config?: AgentFileConfig) : Promise<ConfigMutationResponse>;
   chatStream(
     baseUrl: string,
     request: ChatRequest,

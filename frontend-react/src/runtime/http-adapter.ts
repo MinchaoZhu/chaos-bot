@@ -81,18 +81,6 @@ async function requestWithoutBody(url: string, init?: RequestInit): Promise<void
   }
 }
 
-async function requestJsonWithBody<T>(url: string, body: unknown, init?: RequestInit): Promise<T> {
-  return requestJson<T>(url, {
-    ...init,
-    method: init?.method ?? "POST",
-    headers: {
-      "content-type": "application/json",
-      ...(init?.headers ?? {}),
-    },
-    body: JSON.stringify(body),
-  });
-}
-
 export function createHttpAdapter(): RuntimeAdapter {
   return {
     source: "http",

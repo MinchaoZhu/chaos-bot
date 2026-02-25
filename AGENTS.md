@@ -31,7 +31,7 @@
 - Every new feature must include a dedicated e2e testing phase in its task plan.
 
 ## Architecture Governance (Frozen)
-- Backend source root is limited to DDD five layers + `lib.rs`: `application/`, `domain/`, `infrastructure/`, `interface/`, `runtime/`.
+- Backend source root is limited to DDD five layers + `lib.rs`: `application/`, `domain/`, `infrastructure/`, `runtime/`.
 - New business directories at `backend/src` root are forbidden.
 - `infrastructure/model` is the only implementation location for model providers.
 - `infrastructure/tooling` is the only implementation location for tool registry and tool implementations.
