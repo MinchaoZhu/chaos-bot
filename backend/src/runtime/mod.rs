@@ -6,7 +6,7 @@ use std::sync::Arc;
 use tokio::sync::RwLock;
 
 use crate::application::agent::{AgentConfig, AgentLoop};
-use crate::domain::ports::{MemoryPort, ToolExecutorPort};
+use crate::domain::ports::{MemoryPort, SkillPort, ToolExecutorPort};
 use crate::interface::api::AppState;
 use crate::runtime::bootstrap::bootstrap_runtime_dirs;
 use crate::infrastructure::config::{workspace_base_for, AgentFileConfig, AppConfig};
@@ -14,6 +14,7 @@ use crate::runtime::config_runtime::{AgentFactory, ConfigRuntime, RestartMode};
 use crate::infrastructure::model;
 use crate::infrastructure::memory::MemoryStore;
 use crate::infrastructure::personality::{PersonalityLoader, PersonalitySource};
+use crate::infrastructure::skills::SkillStore;
 use crate::infrastructure::tooling::ToolRegistry;
 
 struct BackendAgentFactory;
@@ -27,7 +28,8 @@ impl AgentFactory for BackendAgentFactory {
 
 pub async fn build_app(config: &AppConfig) -> Result<AppState> {
     let agent = build_agent_loop(config).await?;
-    Ok(AppState::new(agent))
+    let skills: Arc<dyn SkillPort> = Arc::new(SkillStore::new(config.skills_dir.clone()));
+    Ok(AppState::new(agent).with_skills(skills))
 }
 
 pub async fn build_app_with_config_runtime(
@@ -51,7 +53,8 @@ pub async fn build_app_with_config_runtime(
         restart_mode,
     ));
 
-    Ok(AppState::with_config_runtime(agent_slot, runtime))
+    let skills: Arc<dyn SkillPort> = Arc::new(SkillStore::new(config.skills_dir.clone()));
+    Ok(AppState::with_config_runtime(agent_slot, runtime).with_skills(skills))
 }
 
 pub async fn build_agent_loop(config: &AppConfig) -> Result<Arc<AgentLoop>> {
@@ -72,11 +75,15 @@ pub async fn build_agent_loop(config: &AppConfig) -> Result<Arc<AgentLoop>> {
     registry.register_default_tools();
     let tools: Arc<dyn ToolExecutorPort> = Arc::new(registry);
 
+    let skills: Arc<dyn SkillPort> = Arc::new(SkillStore::new(config.skills_dir.clone()));
+    skills.ensure_layout().await?;
+
     Ok(Arc::new(AgentLoop::new(
         provider,
         tools,
         personality,
         memory,
+        skills,
         AgentConfig::from(config),
     )))
 }

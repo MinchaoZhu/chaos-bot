@@ -75,6 +75,19 @@ struct ConfigMutationRequest {
     config: Option<Value>,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct SkillMeta {
+    id: String,
+    name: String,
+    description: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct SkillDetail {
+    meta: SkillMeta,
+    body: String,
+}
+
 #[derive(Debug, Clone, Serialize)]
 struct ChatStreamEnvelope {
     stream_id: String,
@@ -228,6 +241,16 @@ async fn restart_config(
     .await
 }
 
+#[tauri::command]
+async fn list_skills(base_url: String) -> Result<Vec<SkillMeta>, RuntimeError> {
+    get_json(format!("{}/api/skills", normalize_base_url(&base_url))).await
+}
+
+#[tauri::command]
+async fn get_skill(base_url: String, skill_id: String) -> Result<SkillDetail, RuntimeError> {
+    get_json(format!("{}/api/skills/{}", normalize_base_url(&base_url), skill_id)).await
+}
+
 fn parse_sse_block(block: &str) -> Option<(String, Value)> {
     let mut event = String::from("delta");
     let mut data = String::new();
@@ -326,7 +349,9 @@ pub fn run() {
             apply_config,
             reset_config,
             restart_config,
-            chat_stream
+            chat_stream,
+            list_skills,
+            get_skill
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

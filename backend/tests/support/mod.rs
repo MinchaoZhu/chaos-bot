@@ -13,6 +13,7 @@ use chaos_bot_backend::runtime::config_runtime::{AgentFactory, ConfigRuntime, Re
 use chaos_bot_backend::infrastructure::model::{LlmProvider, LlmRequest, LlmResponse, LlmStream, LlmStreamEvent};
 use chaos_bot_backend::infrastructure::memory::{MemoryBackend, MemoryStore};
 use chaos_bot_backend::infrastructure::personality::{PersonalityLoader, PersonalitySource};
+use chaos_bot_backend::infrastructure::skills::EmptySkillStore;
 use chaos_bot_backend::infrastructure::tooling::{Tool, ToolContext, ToolRegistry};
 use chaos_bot_backend::domain::types::{Message, ToolCall, ToolExecution, ToolSpec, Usage};
 use futures::stream;
@@ -285,6 +286,7 @@ pub fn build_test_state_with_registry(
         Arc::new(registry),
         personality,
         memory,
+        Arc::new(EmptySkillStore),
         default_agent_config(temp.path().to_path_buf()),
     );
 
@@ -314,6 +316,7 @@ pub fn build_test_agent_with_registry(
         Arc::new(registry),
         personality,
         memory,
+        Arc::new(EmptySkillStore),
         default_agent_config(temp.path().to_path_buf()),
     );
 
@@ -346,6 +349,7 @@ impl AgentFactory for RuntimeTestAgentFactory {
             Arc::new(ToolRegistry::new()),
             personality,
             memory,
+            Arc::new(EmptySkillStore),
             AgentConfig {
                 model: config.model.clone(),
                 temperature: config.temperature,

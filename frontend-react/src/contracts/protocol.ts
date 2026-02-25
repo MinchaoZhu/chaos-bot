@@ -107,3 +107,14 @@ export interface ConfigMutationRequest {
   raw?: string;
   config?: AgentFileConfig;
 }
+
+export interface SkillMeta {
+  id: string;
+  name: string;
+  description: string;
+}
+
+export interface SkillDetail {
+  meta: SkillMeta;
+  body: string;
+}

@@ -20,6 +20,22 @@ async function sendAndAssertConversation(page: Page, message: string) {
   );
 }
 
+async function assertSkillsTabFlow(page: Page, mode: "desktop" | "mobile") {
+  if (mode === "desktop") {
+    await page.getByRole("button", { name: "Skills" }).click();
+  } else {
+    const skillsTab = page.getByRole("button", { name: "skills" });
+    await skillsTab.scrollIntoViewIfNeeded();
+    await skillsTab.click({ force: true });
+  }
+
+  await expect(page.locator(".skills-panel")).toBeVisible();
+  // The built-in skill-creator skill should always be present after startup.
+  const skillCards = page.locator(".skill-card");
+  await expect(skillCards).toHaveCount(1);
+  await expect(skillCards.first()).toContainText("skill-creator");
+}
+
 async function assertConfigTabFlow(page: Page, mode: "desktop" | "mobile") {
   if (mode === "desktop") {
     await page.getByRole("button", { name: "Config" }).click();
@@ -60,6 +76,7 @@ test("react shell desktop layout supports full flow", async ({ page }, testInfo)
 
   await expect(page.locator(".event-panel")).toContainText(`[request] ${message}`);
   await assertConfigTabFlow(page, "desktop");
+  await assertSkillsTabFlow(page, "desktop");
 });
 
 test("react shell mobile layout supports pane switching flow", async ({ page }, testInfo) => {
@@ -80,4 +97,5 @@ test("react shell mobile layout supports pane switching flow", async ({ page }, 
   await expect(page.locator(".event-panel")).toContainText(`[request] ${message}`);
 
   await assertConfigTabFlow(page, "mobile");
+  await assertSkillsTabFlow(page, "mobile");
 });

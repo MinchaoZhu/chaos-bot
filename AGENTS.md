@@ -4,8 +4,8 @@
 - Project: bot
 - Main Repository: /home/debian/projects/chaos-bot
 - Branch: feat/bot
-- Active Task: task-14
-- Last Updated: 2026-02-25T15:18:21+08:00
+- Active Task: task-15
+- Last Updated: 2026-02-26T00:00:00+08:00
 
 ## Task Index
 - task-1: done
@@ -22,8 +22,21 @@
 - task-12: done
 - task-13: done
 - task-14: done
+- task-15: done
 
 ## Verification
+- `task-15` 已完成：Skills 系统全链路实现完毕。
+  - `~/.chaos-bot/skills/` 启动时自动创建，内置 `skill-creator` skill（seeded from embedded template）。
+  - Agent system prompt 始终注入所有 skill 摘要；`/activate <skill-id>` 注入完整 skill body。
+  - `GET /api/skills` / `GET /api/skills/:id` REST 端点上线。
+  - Tauri commands `list_skills` / `get_skill` 注册。
+  - 前端 desktop 3-tab（Events/Config/Skills）+ mobile 5-tab（chat/sessions/events/config/skills）。
+  - `SkillsPanel` 展示 skill 卡片，点击展开完整 body。
+- `npm --prefix frontend-react run build` passed.
+- `cargo check --manifest-path src-tauri/Cargo.toml` passed.
+- `cargo test --workspace` passed (all tests green).
+- `make test-e2e` passed (Playwright 2 passed, 2 skipped; includes skills tab desktop/mobile).
+- `make test-all` passed (unit + integration + e2e, task-15 completion gate).
 - `task-14` 已完成：React Shell 增加 Config Tab（desktop 右侧 Events/Config 切换 + mobile config pane），并接入 `/api/config*` 全链路（http/tauri）。
 - `npm --prefix frontend-react run build` passed.
 - `cargo check --manifest-path src-tauri/Cargo.toml` passed.
@@ -125,10 +138,11 @@
 - `.pm/bot/task-12.md`: LLM/Tools 端口化下沉重构计划（已完成）。
 - `.pm/bot/task-13.md`: LLM/Tools 下沉 + README 文档收敛 + DDD 治理约束重构计划。
 - `.pm/bot/task-14.md`: React Shell 增加 Config Tab 任务计划与执行记录（已完成）。
+- `.pm/bot/task-15.md`: Skills 系统全链路实现计划与执行记录（已完成）。
 - `AGENTS.md`: Shared runtime status, task index, and verification summary.
 - `CLAUDE.md`: Symlink to `AGENTS.md`.
 
 ## Next Actions
-1. 规划 `task-15`（可选）：将 Config 编辑升级为结构化表单 + raw 双向同步。
+1. 规划 `task-16`（可选）：Skills CRUD API — 通过 REST API 或 UI 创建/编辑/删除 skill 文件。
 2. 补充 config 错误场景 e2e（invalid JSON / 400 payload）以覆盖负路径。
 3. 持续以 `make test-all` 作为后续任务完成门禁。

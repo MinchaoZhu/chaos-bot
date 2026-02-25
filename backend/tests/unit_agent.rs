@@ -14,7 +14,7 @@ use support::*;
 
 #[test]
 fn build_system_prompt_without_memory() {
-    let prompt = AgentLoop::build_system_prompt("You are helpful.", &[]);
+    let prompt = AgentLoop::build_system_prompt("You are helpful.", &[], &[], None);
     assert_eq!(prompt, "You are helpful.");
     assert!(!prompt.contains("Memory Context"));
 }
@@ -33,7 +33,7 @@ fn build_system_prompt_with_memory() {
             snippet: "log entry".into(),
         },
     ];
-    let prompt = AgentLoop::build_system_prompt("Base prompt.", &hits);
+    let prompt = AgentLoop::build_system_prompt("Base prompt.", &hits, &[], None);
     assert!(prompt.contains("Base prompt."));
     assert!(prompt.contains("Relevant Memory Context"));
     assert!(prompt.contains("fact: important"));
@@ -49,7 +49,7 @@ fn build_system_prompt_limits_to_6_hits() {
             snippet: format!("hit {i}"),
         })
         .collect();
-    let prompt = AgentLoop::build_system_prompt("Base.", &hits);
+    let prompt = AgentLoop::build_system_prompt("Base.", &hits, &[], None);
     // Should only contain first 6 hits
     assert!(prompt.contains("hit 0"));
     assert!(prompt.contains("hit 5"));
@@ -58,7 +58,7 @@ fn build_system_prompt_limits_to_6_hits() {
 
 #[test]
 fn build_system_prompt_trims_personality() {
-    let prompt = AgentLoop::build_system_prompt("  padded  \n\n", &[]);
+    let prompt = AgentLoop::build_system_prompt("  padded  \n\n", &[], &[], None);
     assert_eq!(prompt, "padded");
 }
 

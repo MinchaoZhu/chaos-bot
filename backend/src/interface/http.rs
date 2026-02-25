@@ -5,9 +5,12 @@ use crate::domain::config::{
     ConfigMutationInput, ConfigMutationResponse, ConfigRestartInput, ConfigStateResponse,
 };
 use crate::infrastructure::config::AgentFileConfig;
+use crate::domain::ports::SkillPort;
+use crate::domain::skills::{SkillDetail, SkillMeta};
 use crate::domain::AppError;
 use crate::domain::types::SessionState;
 use crate::infrastructure::session_store::SessionStore;
+use crate::infrastructure::skills::EmptySkillStore;
 use crate::runtime::config_runtime::ConfigRuntime;
 use axum::extract::{Path, State};
 use axum::response::sse::{Event, KeepAlive, Sse};
@@ -28,6 +31,7 @@ pub struct AppState {
     pub agent: Arc<RwLock<Arc<AgentLoop>>>,
     pub sessions: SessionStore,
     pub config_runtime: Option<Arc<ConfigRuntime>>,
+    pub skills: Arc<dyn SkillPort>,
 }
 
 impl AppState {
@@ -36,6 +40,7 @@ impl AppState {
             agent: Arc::new(RwLock::new(agent)),
             sessions: SessionStore::new(),
             config_runtime: None,
+            skills: Arc::new(EmptySkillStore),
         }
     }
 
@@ -47,7 +52,13 @@ impl AppState {
             agent,
             sessions: SessionStore::new(),
             config_runtime: Some(config_runtime),
+            skills: Arc::new(EmptySkillStore),
         }
+    }
+
+    pub fn with_skills(mut self, skills: Arc<dyn SkillPort>) -> Self {
+        self.skills = skills;
+        self
     }
 
     pub async fn current_agent(&self) -> Arc<AgentLoop> {
@@ -83,6 +94,8 @@ pub fn router(state: AppState) -> Router {
         .route("/api/config/reset", post(reset_config))
         .route("/api/config/apply", post(apply_config))
         .route("/api/config/restart", post(restart_config))
+        .route("/api/skills", get(list_skills))
+        .route("/api/skills/:id", get(get_skill))
         .with_state(state)
 }
 
@@ -226,6 +239,27 @@ async fn restart_config(
     };
 
     Ok(Json(service.restart(input).await?))
+}
+
+async fn list_skills(State(state): State<AppState>) -> Result<Json<Vec<SkillMeta>>, AppError> {
+    let skills = state
+        .skills
+        .list()
+        .await
+        .map_err(|e| AppError::internal(e.to_string()))?;
+    Ok(Json(skills))
+}
+
+async fn get_skill(
+    Path(id): Path<String>,
+    State(state): State<AppState>,
+) -> Result<Json<SkillDetail>, AppError> {
+    let skill = state
+        .skills
+        .get(&id)
+        .await
+        .map_err(|_| AppError::not_found("skill not found"))?;
+    Ok(Json(skill))
 }
 
 fn chat_event_to_sse(event: ChatEvent) -> Event {

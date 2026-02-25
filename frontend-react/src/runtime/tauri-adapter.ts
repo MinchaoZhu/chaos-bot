@@ -10,6 +10,8 @@ import {
   type HealthResponse,
   type RuntimeError,
   type SessionState,
+  type SkillDetail,
+  type SkillMeta,
 } from "../contracts/protocol";
 import type { RuntimeAdapter } from "./adapter";
 
@@ -60,6 +62,12 @@ export function createTauriAdapter(): RuntimeAdapter {
     },
     async restartConfig(baseUrl: string, payload?: ConfigMutationRequest): Promise<ConfigMutationResponse> {
       return invoke<ConfigMutationResponse>("restart_config", { baseUrl, request: payload ?? {} });
+    },
+    async listSkills(baseUrl: string): Promise<SkillMeta[]> {
+      return invoke<SkillMeta[]>("list_skills", { baseUrl });
+    },
+    async getSkill(baseUrl: string, skillId: string): Promise<SkillDetail> {
+      return invoke<SkillDetail>("get_skill", { baseUrl, skillId });
     },
     async chatStream(baseUrl: string, request: ChatRequest, onEvent, onError): Promise<void> {
       const streamId = randomStreamId();

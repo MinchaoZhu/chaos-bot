@@ -5,3 +5,5 @@ pub const DEFAULT_SOUL_MD: &str = include_str!("../../../templates/personality/S
 pub const DEFAULT_IDENTITY_MD: &str = include_str!("../../../templates/personality/IDENTITY.md");
 pub const DEFAULT_USER_MD: &str = include_str!("../../../templates/personality/USER.md");
 pub const DEFAULT_AGENTS_MD: &str = include_str!("../../../templates/personality/AGENTS.md");
+pub const DEFAULT_SKILL_CREATOR_MD: &str =
+    include_str!("../../../templates/skills/skill-creator/SKILL.md");

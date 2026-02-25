@@ -25,6 +25,7 @@ fn make_config(root: PathBuf, personality_dir: PathBuf) -> AppConfig {
         personality_dir,
         memory_dir: root.join("memory"),
         memory_file: root.join("MEMORY.md"),
+        skills_dir: root.join("skills"),
     }
 }
 

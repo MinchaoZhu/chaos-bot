@@ -33,6 +33,7 @@ pub struct AppConfig {
     pub personality_dir: PathBuf,
     pub memory_dir: PathBuf,
     pub memory_file: PathBuf,
+    pub skills_dir: PathBuf,
 }
 
 #[derive(Clone, Debug)]
@@ -67,6 +68,7 @@ impl Default for AppConfig {
             personality_dir: workspace.join("personality"),
             memory_dir: workspace.join("memory"),
             memory_file: workspace.join("MEMORY.md"),
+            skills_dir: workspace.join("skills"),
             workspace,
         }
     }
@@ -197,6 +199,7 @@ impl AppConfig {
             personality_dir: workspace.join("personality"),
             memory_dir: workspace.join("memory"),
             memory_file: workspace.join("MEMORY.md"),
+            skills_dir: workspace.join("skills"),
             workspace,
         }
     }
@@ -207,6 +210,7 @@ impl AppConfig {
         self.personality_dir = self.workspace.join("personality");
         self.memory_dir = self.workspace.join("memory");
         self.memory_file = self.workspace.join("MEMORY.md");
+        self.skills_dir = self.workspace.join("skills");
     }
 }
 

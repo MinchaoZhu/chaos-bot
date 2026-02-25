@@ -3,6 +3,7 @@ pub mod chat;
 pub mod config;
 pub mod error;
 pub mod ports;
+pub mod skills;
 pub mod types;
 
 pub use error::{AppError, ErrorCode};

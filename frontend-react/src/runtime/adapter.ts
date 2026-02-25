@@ -7,6 +7,8 @@ import type {
   HealthResponse,
   RuntimeError,
   SessionState,
+  SkillDetail,
+  SkillMeta,
 } from "../contracts/protocol";
 
 export interface RuntimeAdapter {
@@ -20,6 +22,8 @@ export interface RuntimeAdapter {
   applyConfig(baseUrl: string, payload: ConfigMutationRequest): Promise<ConfigMutationResponse>;
   resetConfig(baseUrl: string): Promise<ConfigMutationResponse>;
   restartConfig(baseUrl: string, payload?: ConfigMutationRequest): Promise<ConfigMutationResponse>;
+  listSkills(baseUrl: string): Promise<SkillMeta[]>;
+  getSkill(baseUrl: string, skillId: string): Promise<SkillDetail>;
   chatStream(
     baseUrl: string,
     request: ChatRequest,

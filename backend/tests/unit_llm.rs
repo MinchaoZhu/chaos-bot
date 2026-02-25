@@ -427,6 +427,7 @@ fn build_provider_mock() {
         personality_dir: std::path::PathBuf::from("."),
         memory_dir: std::path::PathBuf::from("."),
         memory_file: std::path::PathBuf::from("."),
+        skills_dir: std::path::PathBuf::from("."),
     };
     let provider = build_provider(&config).unwrap();
     assert_eq!(provider.name(), "mock");
@@ -456,6 +457,7 @@ fn build_provider_unsupported() {
         personality_dir: std::path::PathBuf::from("."),
         memory_dir: std::path::PathBuf::from("."),
         memory_file: std::path::PathBuf::from("."),
+        skills_dir: std::path::PathBuf::from("."),
     };
     assert!(build_provider(&config).is_err());
 }
@@ -484,6 +486,7 @@ fn build_provider_openai_without_key_errors() {
         personality_dir: std::path::PathBuf::from("."),
         memory_dir: std::path::PathBuf::from("."),
         memory_file: std::path::PathBuf::from("."),
+        skills_dir: std::path::PathBuf::from("."),
     };
     assert!(build_provider(&config).is_err());
 }
@@ -512,6 +515,7 @@ fn build_provider_anthropic_without_key_errors() {
         personality_dir: std::path::PathBuf::from("."),
         memory_dir: std::path::PathBuf::from("."),
         memory_file: std::path::PathBuf::from("."),
+        skills_dir: std::path::PathBuf::from("."),
     };
     assert!(build_provider(&config).is_err());
 }
@@ -540,6 +544,7 @@ fn build_provider_gemini_without_key_errors() {
         personality_dir: std::path::PathBuf::from("."),
         memory_dir: std::path::PathBuf::from("."),
         memory_file: std::path::PathBuf::from("."),
+        skills_dir: std::path::PathBuf::from("."),
     };
     assert!(build_provider(&config).is_err());
 }
@@ -573,6 +578,7 @@ async fn mock_provider_chat_stream_text() {
         personality_dir: std::path::PathBuf::from("."),
         memory_dir: std::path::PathBuf::from("."),
         memory_file: std::path::PathBuf::from("."),
+        skills_dir: std::path::PathBuf::from("."),
     };
     let provider = build_provider(&config).unwrap();
 
@@ -624,6 +630,7 @@ async fn mock_provider_chat_stream_tool_call() {
         personality_dir: std::path::PathBuf::from("."),
         memory_dir: std::path::PathBuf::from("."),
         memory_file: std::path::PathBuf::from("."),
+        skills_dir: std::path::PathBuf::from("."),
     };
     let provider = build_provider(&config).unwrap();
 

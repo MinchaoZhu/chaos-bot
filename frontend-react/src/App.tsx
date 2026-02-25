@@ -4,6 +4,7 @@ import { ConversationPanel } from "./components/ConversationPanel";
 import { EventTimeline } from "./components/EventTimeline";
 import { MobilePaneTabs, type MobilePane } from "./components/MobilePaneTabs";
 import { SessionRail } from "./components/SessionRail";
+import { SkillsPanel } from "./components/SkillsPanel";
 import type { ChatStreamEnvelope, RuntimeError, SessionState } from "./contracts/protocol";
 import { useLayoutAdapter } from "./layout/adapter";
 import { createRuntimeAdapter } from "./runtime";
@@ -13,7 +14,7 @@ type StreamLog = {
   summary: string;
 };
 
-type DesktopSidePane = "events" | "config";
+type DesktopSidePane = "events" | "config" | "skills";
 
 function resolveDefaultBaseUrl(): string {
   if (typeof window === "undefined") {
@@ -214,7 +215,7 @@ export default function App() {
           />
         )}
 
-        {(layout.isDesktop || mobilePane === "chat" || mobilePane === "events" || mobilePane === "config") && (
+        {(layout.isDesktop || mobilePane === "chat" || mobilePane === "events" || mobilePane === "config" || mobilePane === "skills") && (
           <main className={`chat-main ${layout.mode}`}>
             {layout.isDesktop ? (
               <>
@@ -243,17 +244,26 @@ export default function App() {
                     >
                       Config
                     </button>
+                    <button
+                      type="button"
+                      className={desktopSidePane === "skills" ? "active" : ""}
+                      onClick={() => setDesktopSidePane("skills")}
+                    >
+                      Skills
+                    </button>
                   </nav>
 
                   {desktopSidePane === "events" ? (
                     <EventTimeline streamLogs={streamLogs} runtimeError={runtimeError} />
-                  ) : (
+                  ) : desktopSidePane === "config" ? (
                     <ConfigPanel
                       runtime={runtime}
                       baseUrl={baseUrl}
                       onLog={pushLog}
                       onRuntimeError={setRuntimeError}
                     />
+                  ) : (
+                    <SkillsPanel runtime={runtime} baseUrl={baseUrl} />
                   )}
                 </aside>
               </>
@@ -282,6 +292,10 @@ export default function App() {
                 onLog={pushLog}
                 onRuntimeError={setRuntimeError}
               />
+            ) : null}
+
+            {layout.isMobile && mobilePane === "skills" ? (
+              <SkillsPanel runtime={runtime} baseUrl={baseUrl} />
             ) : null}
           </main>
         )}
