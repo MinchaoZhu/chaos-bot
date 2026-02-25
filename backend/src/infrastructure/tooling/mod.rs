@@ -298,10 +298,13 @@ impl Tool for WriteTool {
         if append {
             let mut file = fs::OpenOptions::new()
                 .create(true)
+                .write(true)
                 .append(true)
                 .open(&resolved)
                 .await?;
             file.write_all(content.as_bytes()).await?;
+            file.flush().await?;
+            file.sync_data().await?;
         } else {
             fs::write(&resolved, content).await?;
         }
