@@ -1,4 +1,4 @@
-use crate::types::SessionState;
+use crate::domain::types::SessionState;
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::RwLock;

@@ -1,4 +1,4 @@
-use chaos_bot_backend::personality::PersonalityLoader;
+use chaos_bot_backend::infrastructure::personality::PersonalityLoader;
 use tempfile::tempdir;
 
 #[tokio::test]

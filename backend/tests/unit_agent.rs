@@ -1,9 +1,9 @@
 mod support;
 
-use chaos_bot_backend::agent::AgentLoop;
-use chaos_bot_backend::llm::LlmStreamEvent;
-use chaos_bot_backend::memory::MemoryHit;
-use chaos_bot_backend::types::{Message, SessionState, ToolCall};
+use chaos_bot_backend::application::agent::AgentLoop;
+use chaos_bot_backend::infrastructure::model::LlmStreamEvent;
+use chaos_bot_backend::infrastructure::memory::MemoryHit;
+use chaos_bot_backend::domain::types::{Message, SessionState, ToolCall};
 use serde_json::json;
 use std::sync::Arc;
 use support::*;
@@ -79,7 +79,7 @@ fn enforce_token_budget_removes_middle_messages() {
     // Should keep at least system + one other
     assert!(messages.len() >= 2);
     // System should always be first
-    assert_eq!(messages[0].role, chaos_bot_backend::types::Role::System);
+    assert_eq!(messages[0].role, chaos_bot_backend::domain::types::Role::System);
 }
 
 #[test]
@@ -150,7 +150,7 @@ async fn run_with_tool_calls_loops() {
         arguments: json!({}),
     };
     let provider = MockStreamProvider::tool_then_text(tool_call, "Done!");
-    let mut registry = chaos_bot_backend::tools::ToolRegistry::new();
+    let mut registry = chaos_bot_backend::infrastructure::tooling::ToolRegistry::new();
     registry.register(MockTool::fixed("mock_tool", "tool output"));
 
     let (_temp, agent) = build_test_agent_with_registry(Arc::new(provider), registry);
@@ -200,7 +200,7 @@ async fn run_stream_delivers_delta_events() {
     let mut deltas = Vec::new();
     agent
         .run_stream(&mut session, "hi".to_string(), |event| {
-            if let chaos_bot_backend::agent::AgentStreamEvent::Delta(d) = event {
+            if let chaos_bot_backend::application::agent::AgentStreamEvent::Delta(d) = event {
                 deltas.push(d);
             }
         })
@@ -310,7 +310,7 @@ async fn max_iterations_returns_fallback() {
         ],
     ]);
 
-    let mut registry = chaos_bot_backend::tools::ToolRegistry::new();
+    let mut registry = chaos_bot_backend::infrastructure::tooling::ToolRegistry::new();
     registry.register(MockTool::fixed("mock_tool", "ok"));
 
     let (_temp, agent) = build_test_agent_with_registry(Arc::new(provider), registry);

@@ -3,18 +3,18 @@
 
 use anyhow::Result;
 use async_trait::async_trait;
-use chaos_bot_backend::agent::{AgentConfig, AgentLoop};
-use chaos_bot_backend::api::AppState;
-use chaos_bot_backend::config::{
+use chaos_bot_backend::application::agent::{AgentConfig, AgentLoop};
+use chaos_bot_backend::interface::api::AppState;
+use chaos_bot_backend::infrastructure::config::{
     write_config_file, AgentFileConfig, AgentLlmConfig, AgentLoggingConfig, AgentSecretsConfig,
     AgentServerConfig, AppConfig, EnvSecrets,
 };
-use chaos_bot_backend::config_runtime::{AgentFactory, ConfigRuntime, RestartMode};
-use chaos_bot_backend::llm::{LlmProvider, LlmRequest, LlmResponse, LlmStream, LlmStreamEvent};
-use chaos_bot_backend::memory::{MemoryBackend, MemoryStore};
-use chaos_bot_backend::personality::{PersonalityLoader, PersonalitySource};
-use chaos_bot_backend::tools::{Tool, ToolContext, ToolRegistry};
-use chaos_bot_backend::types::{Message, ToolCall, ToolExecution, ToolSpec, Usage};
+use chaos_bot_backend::runtime::config_runtime::{AgentFactory, ConfigRuntime, RestartMode};
+use chaos_bot_backend::infrastructure::model::{LlmProvider, LlmRequest, LlmResponse, LlmStream, LlmStreamEvent};
+use chaos_bot_backend::infrastructure::memory::{MemoryBackend, MemoryStore};
+use chaos_bot_backend::infrastructure::personality::{PersonalityLoader, PersonalitySource};
+use chaos_bot_backend::infrastructure::tooling::{Tool, ToolContext, ToolRegistry};
+use chaos_bot_backend::domain::types::{Message, ToolCall, ToolExecution, ToolSpec, Usage};
 use futures::stream;
 use serde_json::{json, Value};
 use std::path::PathBuf;

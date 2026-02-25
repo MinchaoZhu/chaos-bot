@@ -1,5 +1,5 @@
-use chaos_bot_backend::bootstrap::bootstrap_runtime_dirs;
-use chaos_bot_backend::config::AppConfig;
+use chaos_bot_backend::runtime::bootstrap::bootstrap_runtime_dirs;
+use chaos_bot_backend::infrastructure::config::AppConfig;
 use std::path::PathBuf;
 use tempfile::tempdir;
 

@@ -1,9 +1,10 @@
-use crate::config::AppConfig;
-use crate::llm::{LlmProvider, LlmRequest};
-use crate::memory::{MemoryBackend, MemoryHit};
-use crate::personality::PersonalitySource;
-use crate::tools::{ToolContext, ToolRegistry};
-use crate::types::{Message, SessionState, ToolCall, ToolResult, Usage};
+use crate::infrastructure::config::AppConfig;
+use crate::domain::chat::ToolEvent;
+use crate::domain::ports::{
+    MemoryHit, MemoryPort, ModelPort, ModelRequest, ToolExecutionContext, ToolExecutorPort,
+};
+use crate::infrastructure::personality::PersonalitySource;
+use crate::domain::types::{Message, SessionState, ToolResult, Usage};
 use anyhow::Result;
 use futures::StreamExt;
 use serde::Serialize;
@@ -35,17 +36,11 @@ impl From<&AppConfig> for AgentConfig {
 
 #[derive(Clone)]
 pub struct AgentLoop {
-    provider: Arc<dyn LlmProvider>,
-    tools: Arc<ToolRegistry>,
+    provider: Arc<dyn ModelPort>,
+    tools: Arc<dyn ToolExecutorPort>,
     personality: Arc<dyn PersonalitySource>,
-    memory: Arc<dyn MemoryBackend>,
+    memory: Arc<dyn MemoryPort>,
     config: AgentConfig,
-}
-
-#[derive(Clone, Debug, Serialize)]
-pub struct ToolEvent {
-    pub call: ToolCall,
-    pub result: ToolResult,
 }
 
 #[derive(Clone, Debug)]
@@ -64,10 +59,10 @@ pub struct AgentRunOutput {
 
 impl AgentLoop {
     pub fn new(
-        provider: Arc<dyn LlmProvider>,
-        tools: Arc<ToolRegistry>,
+        provider: Arc<dyn ModelPort>,
+        tools: Arc<dyn ToolExecutorPort>,
         personality: Arc<dyn PersonalitySource>,
-        memory: Arc<dyn MemoryBackend>,
+        memory: Arc<dyn MemoryPort>,
         config: AgentConfig,
     ) -> Self {
         Self {
@@ -136,7 +131,7 @@ impl AgentLoop {
 
             let mut stream = self
                 .provider
-                .chat_stream(LlmRequest {
+                .chat_stream(ModelRequest {
                     model: self.config.model.clone(),
                     messages: messages.clone(),
                     tools: self.tools.specs(),
@@ -197,7 +192,7 @@ impl AgentLoop {
 
             finish_reason = Some("tool_calls".to_string());
             let tool_context =
-                ToolContext::new(self.config.working_dir.clone(), self.memory.clone());
+                ToolExecutionContext::new(self.config.working_dir.clone(), self.memory.clone());
             tracing::debug!(
                 session_id = %session.id,
                 tool_calls = tool_calls.len(),
@@ -213,7 +208,7 @@ impl AgentLoop {
                 );
                 let result = match self
                     .tools
-                    .dispatch(&call.id, &call.name, call.arguments.clone(), &tool_context)
+                    .execute(&call.id, &call.name, call.arguments.clone(), &tool_context)
                     .await
                 {
                     Ok(output) => output,

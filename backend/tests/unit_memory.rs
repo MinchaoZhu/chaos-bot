@@ -1,4 +1,4 @@
-use chaos_bot_backend::memory::MemoryStore;
+use chaos_bot_backend::infrastructure::memory::MemoryStore;
 use tempfile::tempdir;
 
 fn make_store() -> (tempfile::TempDir, MemoryStore) {

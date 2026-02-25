@@ -5,7 +5,7 @@ use std::fs;
 use std::path::Path;
 use std::path::PathBuf;
 
-use crate::runtime_assets::{DEFAULT_AGENT_JSON, DEFAULT_ENV_EXAMPLE};
+use crate::infrastructure::runtime_assets::{DEFAULT_AGENT_JSON, DEFAULT_ENV_EXAMPLE};
 
 const DEFAULT_WORKSPACE_DIR: &str = ".chaos-bot";
 const DEFAULT_CONFIG_FILE_NAME: &str = "config.json";

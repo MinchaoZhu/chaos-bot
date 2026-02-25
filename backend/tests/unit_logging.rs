@@ -1,9 +1,12 @@
-use chaos_bot_backend::config::{
+use chaos_bot_backend::infrastructure::config::{
     AgentFileConfig, AgentLlmConfig, AgentLoggingConfig, AgentSecretsConfig, AgentServerConfig,
     AppConfig, EnvSecrets,
 };
-use chaos_bot_backend::logging::{cleanup_old_logs_at, init_logging};
+use chaos_bot_backend::domain::audit::{redact_json, redact_raw_json};
+use chaos_bot_backend::domain::{AppError, ErrorCode};
+use chaos_bot_backend::infrastructure::logging::{cleanup_old_logs_at, init_logging};
 use chrono::NaiveDate;
+use serde_json::json;
 use tempfile::tempdir;
 
 #[test]
@@ -57,4 +60,38 @@ fn init_logging_writes_to_workspace_log_file() {
 
     let content = std::fs::read_to_string(log_path).expect("read log");
     assert!(content.contains("unit logging smoke"));
+}
+
+#[test]
+fn audit_redacts_sensitive_json_fields() {
+    let payload = json!({
+        "provider": "openai",
+        "secrets": {
+            "openai_api_key": "sk-test-key",
+            "token": "abc"
+        },
+        "nested": {
+            "Authorization": "Bearer 123",
+            "safe": "value"
+        }
+    });
+
+    let redacted = redact_json(&payload);
+    assert_eq!(redacted["secrets"], "***REDACTED***");
+    assert_eq!(redacted["nested"]["Authorization"], "***REDACTED***");
+    assert_eq!(redacted["nested"]["safe"], "value");
+}
+
+#[test]
+fn audit_redacts_non_json_raw_payload() {
+    let redacted = redact_raw_json("OPENAI_API_KEY=secret");
+    assert!(redacted.contains("redacted"));
+    assert!(!redacted.contains("secret"));
+}
+
+#[test]
+fn app_error_exposes_unified_error_code() {
+    let error = AppError::service_unavailable("runtime unavailable");
+    assert_eq!(error.code(), ErrorCode::ServiceUnavailable);
+    assert_eq!(error.code_str(), "service_unavailable");
 }

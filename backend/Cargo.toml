@@ -3,6 +3,10 @@ name = "chaos-bot-backend"
 version = "0.1.0"
 edition = "2021"
 
+[[bin]]
+name = "chaos-bot-backend"
+path = "src/runtime/bin/chaos_bot_backend.rs"
+
 [dependencies]
 anyhow = "1"
 async-trait = "0.1"

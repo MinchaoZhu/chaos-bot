@@ -1,7 +1,7 @@
 use anyhow::Result;
 
-use crate::config::AppConfig;
-use crate::runtime_assets::{
+use crate::infrastructure::config::AppConfig;
+use crate::infrastructure::runtime_assets::{
     DEFAULT_AGENTS_MD, DEFAULT_IDENTITY_MD, DEFAULT_SOUL_MD, DEFAULT_USER_MD,
 };
 

@@ -1,4 +1,4 @@
-use chaos_bot_backend::types::*;
+use chaos_bot_backend::domain::types::*;
 use pretty_assertions::assert_eq;
 
 #[test]

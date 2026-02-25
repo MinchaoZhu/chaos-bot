@@ -2,9 +2,9 @@ mod support;
 
 use axum::body::{to_bytes, Body};
 use axum::http::{Request, StatusCode};
-use chaos_bot_backend::api::router;
-use chaos_bot_backend::llm::LlmStreamEvent;
-use chaos_bot_backend::types::{SessionState, ToolCall};
+use chaos_bot_backend::interface::api::router;
+use chaos_bot_backend::infrastructure::model::LlmStreamEvent;
+use chaos_bot_backend::domain::types::{SessionState, ToolCall};
 use serde_json::{json, Value};
 use std::sync::Arc;
 use support::*;
@@ -194,7 +194,7 @@ async fn chat_sse_with_tool_calls() {
     };
     let provider = MockStreamProvider::tool_then_text(tool_call, "After tool");
 
-    let mut registry = chaos_bot_backend::tools::ToolRegistry::new();
+    let mut registry = chaos_bot_backend::infrastructure::tooling::ToolRegistry::new();
     registry.register(MockTool::fixed("mock_tool", "tool result"));
 
     let (_temp, state) = build_test_state_with_registry(Arc::new(provider), registry);
@@ -365,78 +365,6 @@ async fn chat_error_returns_sse_error_event() {
 
     assert!(text.contains("event: error"));
     assert!(text.contains("test error"));
-}
-
-// -------------------------------------------------------------------------
-// Static file serving
-// -------------------------------------------------------------------------
-
-#[tokio::test]
-async fn serves_index_html() {
-    let provider = MockStreamProvider::text("hi");
-    let (_temp, state) = build_test_state(Arc::new(provider));
-    let app = router(state);
-
-    let res = app
-        .oneshot(
-            Request::builder()
-                .method("GET")
-                .uri("/")
-                .body(Body::empty())
-                .unwrap(),
-        )
-        .await
-        .unwrap();
-
-    assert_eq!(res.status(), StatusCode::OK);
-    let body = to_bytes(res.into_body(), usize::MAX).await.unwrap();
-    let text = String::from_utf8_lossy(&body);
-    assert!(text.contains("chaos-bot"));
-    assert!(text.contains("<html"));
-}
-
-#[tokio::test]
-async fn serves_app_js() {
-    let provider = MockStreamProvider::text("hi");
-    let (_temp, state) = build_test_state(Arc::new(provider));
-    let app = router(state);
-
-    let res = app
-        .oneshot(
-            Request::builder()
-                .method("GET")
-                .uri("/app.js")
-                .body(Body::empty())
-                .unwrap(),
-        )
-        .await
-        .unwrap();
-
-    assert_eq!(res.status(), StatusCode::OK);
-    let ct = res.headers().get("content-type").unwrap().to_str().unwrap();
-    assert!(ct.contains("javascript"));
-}
-
-#[tokio::test]
-async fn serves_style_css() {
-    let provider = MockStreamProvider::text("hi");
-    let (_temp, state) = build_test_state(Arc::new(provider));
-    let app = router(state);
-
-    let res = app
-        .oneshot(
-            Request::builder()
-                .method("GET")
-                .uri("/style.css")
-                .body(Body::empty())
-                .unwrap(),
-        )
-        .await
-        .unwrap();
-
-    assert_eq!(res.status(), StatusCode::OK);
-    let ct = res.headers().get("content-type").unwrap().to_str().unwrap();
-    assert!(ct.contains("css"));
 }
 
 // -------------------------------------------------------------------------

@@ -51,5 +51,5 @@ Envelope shape:
 ## Compatibility Notes
 
 - Backend API remains unchanged in Phase 1.
-- Legacy web frontend (`frontend/`) is still served by backend routes for existing tests.
-- New frontend shell (`frontend-react/`) and Tauri runtime (`src-tauri/`) are introduced in parallel.
+- `frontend-react/` is the only maintained web frontend.
+- Tauri runtime (`src-tauri/`) consumes the same HTTP/SSE contract.

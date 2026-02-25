@@ -5,8 +5,8 @@ use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::RwLock;
 
-use crate::agent::AgentLoop;
-use crate::config::{read_config_file, write_config_file, AgentFileConfig, AppConfig, EnvSecrets};
+use crate::application::agent::AgentLoop;
+use crate::infrastructure::config::{read_config_file, write_config_file, AgentFileConfig, AppConfig, EnvSecrets};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum RestartMode {
@@ -198,7 +198,7 @@ fn backup_path(path: &Path, level: u8) -> PathBuf {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::config::AgentFileConfig;
+    use crate::infrastructure::config::AgentFileConfig;
     use tempfile::tempdir;
 
     #[test]
