@@ -277,6 +277,38 @@ button[aria-disabled="true"] {
   grid-template-columns: 1fr auto;
 }
 
+.command-hints {
+  margin: 0.55rem 0 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 0.35rem;
+}
+
+.command-hints button {
+  width: 100%;
+  text-align: left;
+  background: rgba(255, 255, 255, 0.82);
+  color: var(--ink);
+  border: 1px solid var(--line);
+  display: grid;
+  gap: 0.2rem;
+}
+
+.command-hints button:hover {
+  background: rgba(255, 255, 255, 0.98);
+}
+
+.hint-usage {
+  font-family: "IBM Plex Mono", "JetBrains Mono", monospace;
+  font-size: 0.82rem;
+}
+
+.hint-description {
+  font-size: 0.8rem;
+  color: var(--ink-soft);
+}
+
 .event-panel ul {
   margin: 0.58rem 0 0;
   padding: 0;

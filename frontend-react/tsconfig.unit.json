@@ -1,0 +1,10 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": false,
+    "outDir": ".tmp/unit",
+    "module": "ES2020",
+    "allowImportingTsExtensions": false
+  },
+  "include": ["src/commands/**/*.ts", "src/contracts/**/*.ts"]
+}

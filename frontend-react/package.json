@@ -7,6 +7,7 @@
     "dev": "vite --host 0.0.0.0 --port 1420",
     "build": "tsc && vite build",
     "preview": "vite preview --host 0.0.0.0 --port 4173",
+    "test:unit": "rm -rf .tmp/unit && tsc -p tsconfig.unit.json && node --test tests/*.test.mjs",
     "tauri:dev": "tauri dev --config ../src-tauri/tauri.conf.json",
     "tauri:build": "tauri build --config ../src-tauri/tauri.conf.json",
     "tauri:android:dev": "tauri android dev --config ../src-tauri/tauri.conf.json",

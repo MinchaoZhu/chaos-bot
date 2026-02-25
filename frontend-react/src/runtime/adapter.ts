@@ -1,6 +1,9 @@
 import type {
+  AgentFileConfig,
   ChatRequest,
   ChatStreamEnvelope,
+  ConfigMutationResponse,
+  ConfigStateResponse,
   HealthResponse,
   RuntimeError,
   SessionState,
@@ -13,6 +16,8 @@ export interface RuntimeAdapter {
   createSession(baseUrl: string): Promise<SessionState>;
   getSession(baseUrl: string, sessionId: string): Promise<SessionState>;
   deleteSession(baseUrl: string, sessionId: string): Promise<void>;
+  getConfig(baseUrl: string): Promise<ConfigStateResponse>;
+  applyConfig(baseUrl: string, config: AgentFileConfig): Promise<ConfigMutationResponse>;
   chatStream(
     baseUrl: string,
     request: ChatRequest,
