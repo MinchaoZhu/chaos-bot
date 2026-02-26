@@ -3,6 +3,7 @@ import { listen } from "@tauri-apps/api/event";
 import {
   type AgentFileConfig,
   CHAT_STREAM_EVENT,
+  type ChannelStatusResponse,
   type ChatRequest,
   type ChatStreamEnvelope,
   type ConfigMutationResponse,
@@ -58,7 +59,6 @@ async function requestJson<T>(url: string, init?: RequestInit): Promise<T> {
       message: `${response.status} ${response.statusText}`,
     } as RuntimeError;
   }
-
   return (await response.json()) as T;
 }
 
@@ -67,6 +67,33 @@ export function createTauriAdapter(): RuntimeAdapter {
     source: "tauri",
     async health(baseUrl: string): Promise<HealthResponse> {
       return invoke<HealthResponse>("health", { baseUrl });
+    },
+    async channelStatus(baseUrl: string): Promise<ChannelStatusResponse> {
+      return requestJson<ChannelStatusResponse>(`${baseUrl}/api/channels/status`);
+    },
+    async getConfig(baseUrl: string): Promise<ConfigStateResponse> {
+      return requestJson<ConfigStateResponse>(`${baseUrl}/api/config`);
+    },
+    async applyConfig(baseUrl: string, config: AgentFileConfig): Promise<ConfigMutationResponse> {
+      return requestJson<ConfigMutationResponse>(`${baseUrl}/api/config/apply`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ config }),
+      });
+    },
+    async resetConfig(baseUrl: string): Promise<ConfigMutationResponse> {
+      return requestJson<ConfigMutationResponse>(`${baseUrl}/api/config/reset`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: "{}",
+      });
+    },
+    async restartConfig(baseUrl: string, config?: AgentFileConfig): Promise<ConfigMutationResponse> {
+      return requestJson<ConfigMutationResponse>(`${baseUrl}/api/config/restart`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(config ? { config } : {}),
+      });
     },
     async listSessions(baseUrl: string): Promise<SessionState[]> {
       return invoke<SessionState[]>("list_sessions", { baseUrl });
@@ -79,16 +106,6 @@ export function createTauriAdapter(): RuntimeAdapter {
     },
     async deleteSession(baseUrl: string, sessionId: string): Promise<void> {
       await invoke("delete_session", { baseUrl, sessionId });
-    },
-    async getConfig(baseUrl: string): Promise<ConfigStateResponse> {
-      return requestJson<ConfigStateResponse>(`${baseUrl}/api/config`);
-    },
-    async applyConfig(baseUrl: string, config: AgentFileConfig): Promise<ConfigMutationResponse> {
-      return requestJson<ConfigMutationResponse>(`${baseUrl}/api/config/apply`, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ config }),
-      });
     },
     async chatStream(baseUrl: string, request: ChatRequest, onEvent, onError): Promise<void> {
       const streamId = randomStreamId();

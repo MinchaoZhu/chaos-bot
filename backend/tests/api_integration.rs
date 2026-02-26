@@ -2,12 +2,17 @@ mod support;
 
 use axum::body::{to_bytes, Body};
 use axum::http::{Request, StatusCode};
+use axum::routing::post;
+use axum::{Json, Router};
 use chaos_bot_backend::interface::api::router;
+use chaos_bot_backend::infrastructure::channels::telegram::TelegramConnector;
+use chaos_bot_backend::infrastructure::channels::ChannelDispatcherRegistry;
 use chaos_bot_backend::infrastructure::model::LlmStreamEvent;
 use chaos_bot_backend::domain::types::{SessionState, ToolCall};
 use serde_json::{json, Value};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use support::*;
+use tokio::net::TcpListener;
 use tower::util::ServiceExt;
 
 // -------------------------------------------------------------------------
@@ -468,4 +473,324 @@ async fn config_api_apply_reset_restart_lifecycle() {
     let body = to_bytes(restart_res.into_body(), usize::MAX).await.unwrap();
     let restart_json: Value = serde_json::from_slice(&body).unwrap();
     assert_eq!(restart_json["restart_scheduled"], false);
+}
+
+fn one_turn_stream(reply: &str) -> Vec<LlmStreamEvent> {
+    vec![
+        LlmStreamEvent {
+            delta: reply.to_string(),
+            tool_call: None,
+            done: false,
+            usage: None,
+        },
+        LlmStreamEvent {
+            delta: String::new(),
+            tool_call: None,
+            done: true,
+            usage: None,
+        },
+    ]
+}
+
+async fn spawn_mock_telegram_api() -> (String, Arc<Mutex<Vec<Value>>>) {
+    let captured = Arc::new(Mutex::new(Vec::<Value>::new()));
+    let app = Router::new()
+        .route(
+            "/botTEST_BOT/sendMessage",
+            post(
+                |axum::extract::State(captured): axum::extract::State<Arc<Mutex<Vec<Value>>>>,
+                 Json(payload): Json<Value>| async move {
+                    captured.lock().unwrap().push(payload);
+                    Json(json!({
+                        "ok": true,
+                        "result": { "message_id": 701 }
+                    }))
+                },
+            ),
+        )
+        .with_state(captured.clone());
+
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let addr = listener.local_addr().unwrap();
+    tokio::spawn(async move {
+        axum::serve(listener, app.into_make_service()).await.unwrap();
+    });
+
+    (format!("http://{addr}"), captured)
+}
+
+#[tokio::test]
+async fn telegram_webhook_roundtrip_and_session_reuse() {
+    let (api_base, captured) = spawn_mock_telegram_api().await;
+    let provider = MockStreamProvider::new(vec![
+        one_turn_stream("telegram reply one"),
+        one_turn_stream("telegram reply two"),
+    ]);
+    let (_temp, mut state) = build_test_state(Arc::new(provider));
+
+    let mut registry = ChannelDispatcherRegistry::new();
+    registry.register(Arc::new(TelegramConnector::new(
+        "TEST_BOT".to_string(),
+        api_base,
+    )));
+    state.channel_dispatcher = Some(Arc::new(registry));
+    state.telegram_webhook_secret = Some("hook-secret".to_string());
+    state.telegram_enabled = true;
+    state.telegram_api_base_url = "http://example.test".to_string();
+
+    let app = router(state);
+    let payload1 = json!({
+        "update_id": 1,
+        "message": {
+            "message_id": 11,
+            "text": "hello from tg",
+            "chat": {"id": 1001},
+            "from": {"id": 2002}
+        }
+    });
+    let payload2 = json!({
+        "update_id": 2,
+        "message": {
+            "message_id": 12,
+            "text": "second message",
+            "chat": {"id": 1001},
+            "from": {"id": 2002}
+        }
+    });
+
+    let res1 = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/api/channels/telegram/webhook")
+                .header("content-type", "application/json")
+                .header("x-telegram-bot-api-secret-token", "hook-secret")
+                .body(Body::from(payload1.to_string()))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(res1.status(), StatusCode::OK);
+    let body1 = to_bytes(res1.into_body(), usize::MAX).await.unwrap();
+    let json1: Value = serde_json::from_slice(&body1).unwrap();
+    let session1 = json1["session_id"].as_str().unwrap().to_string();
+
+    let res2 = app
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/api/channels/telegram/webhook")
+                .header("content-type", "application/json")
+                .header("x-telegram-bot-api-secret-token", "hook-secret")
+                .body(Body::from(payload2.to_string()))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(res2.status(), StatusCode::OK);
+    let body2 = to_bytes(res2.into_body(), usize::MAX).await.unwrap();
+    let json2: Value = serde_json::from_slice(&body2).unwrap();
+    let session2 = json2["session_id"].as_str().unwrap().to_string();
+
+    assert_eq!(session1, session2);
+    let calls = captured.lock().unwrap().clone();
+    assert_eq!(calls.len(), 2);
+    assert_eq!(calls[0]["chat_id"], "1001");
+    assert_eq!(calls[0]["text"], "telegram reply one");
+    assert_eq!(calls[1]["text"], "telegram reply two");
+}
+
+#[tokio::test]
+async fn telegram_webhook_rejects_invalid_secret() {
+    let (api_base, _captured) = spawn_mock_telegram_api().await;
+    let provider = MockStreamProvider::text("reply");
+    let (_temp, mut state) = build_test_state(Arc::new(provider));
+
+    let mut registry = ChannelDispatcherRegistry::new();
+    registry.register(Arc::new(TelegramConnector::new(
+        "TEST_BOT".to_string(),
+        api_base,
+    )));
+    state.channel_dispatcher = Some(Arc::new(registry));
+    state.telegram_webhook_secret = Some("hook-secret".to_string());
+    state.telegram_enabled = true;
+
+    let app = router(state);
+    let payload = json!({
+        "update_id": 1,
+        "message": {
+            "message_id": 11,
+            "text": "hello",
+            "chat": {"id": 1001},
+            "from": {"id": 2002}
+        }
+    });
+
+    let res = app
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/api/channels/telegram/webhook")
+                .header("content-type", "application/json")
+                .body(Body::from(payload.to_string()))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(res.status(), StatusCode::BAD_REQUEST);
+}
+
+#[tokio::test]
+async fn channel_status_reports_enabled_connectors() {
+    let (api_base, _captured) = spawn_mock_telegram_api().await;
+    let provider = MockStreamProvider::text("reply");
+    let (_temp, mut state) = build_test_state(Arc::new(provider));
+
+    let mut registry = ChannelDispatcherRegistry::new();
+    registry.register(Arc::new(TelegramConnector::new(
+        "TEST_BOT".to_string(),
+        api_base.clone(),
+    )));
+    state.channel_dispatcher = Some(Arc::new(registry));
+    state.telegram_enabled = true;
+    state.telegram_polling = true;
+    state.telegram_api_base_url = api_base;
+    state.telegram_webhook_secret = Some("hook-secret".to_string());
+
+    let app = router(state);
+    let res = app
+        .oneshot(
+            Request::builder()
+                .method("GET")
+                .uri("/api/channels/status")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(res.status(), StatusCode::OK);
+    let body = to_bytes(res.into_body(), usize::MAX).await.unwrap();
+    let json: Value = serde_json::from_slice(&body).unwrap();
+    assert_eq!(json["enabled_channels"][0], "telegram");
+    assert_eq!(json["telegram"]["enabled"], true);
+    assert_eq!(json["telegram"]["polling"], true);
+    assert_eq!(json["telegram"]["webhook_secret_configured"], true);
+}
+
+#[tokio::test]
+async fn telegram_webhook_retries_transient_failures_and_succeeds() {
+    let provider = MockStreamProvider::text("Mock response to: trigger [telegram-retry:2]");
+    let (_temp, mut state) = build_test_state(Arc::new(provider));
+    let mut registry = ChannelDispatcherRegistry::new();
+    registry.register(Arc::new(TelegramConnector::new(
+        "TEST_BOT".to_string(),
+        "mock://telegram".to_string(),
+    )));
+    state.channel_dispatcher = Some(Arc::new(registry));
+    state.telegram_webhook_secret = Some("hook-secret".to_string());
+    state.telegram_enabled = true;
+
+    let app = router(state);
+    let payload = json!({
+        "update_id": 101,
+        "message": {
+            "message_id": 7,
+            "text": "trigger [telegram-retry:2]",
+            "chat": {"id": 1001},
+            "from": {"id": 2002}
+        }
+    });
+    let res = app
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/api/channels/telegram/webhook")
+                .header("content-type", "application/json")
+                .header("x-telegram-bot-api-secret-token", "hook-secret")
+                .body(Body::from(payload.to_string()))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(res.status(), StatusCode::OK);
+}
+
+#[tokio::test]
+async fn telegram_webhook_outage_returns_500_after_retries() {
+    let provider = MockStreamProvider::text("Mock response to: trigger [telegram-outage]");
+    let (_temp, mut state) = build_test_state(Arc::new(provider));
+    let mut registry = ChannelDispatcherRegistry::new();
+    registry.register(Arc::new(TelegramConnector::new(
+        "TEST_BOT".to_string(),
+        "mock://telegram".to_string(),
+    )));
+    state.channel_dispatcher = Some(Arc::new(registry));
+    state.telegram_webhook_secret = Some("hook-secret".to_string());
+    state.telegram_enabled = true;
+
+    let app = router(state);
+    let payload = json!({
+        "update_id": 102,
+        "message": {
+            "message_id": 8,
+            "text": "trigger [telegram-outage]",
+            "chat": {"id": 1001},
+            "from": {"id": 2002}
+        }
+    });
+    let res = app
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/api/channels/telegram/webhook")
+                .header("content-type", "application/json")
+                .header("x-telegram-bot-api-secret-token", "hook-secret")
+                .body(Body::from(payload.to_string()))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(res.status(), StatusCode::INTERNAL_SERVER_ERROR);
+}
+
+#[tokio::test]
+async fn telegram_webhook_ignores_malformed_update_without_text() {
+    let provider = MockStreamProvider::text("unused");
+    let (_temp, mut state) = build_test_state(Arc::new(provider));
+    let mut registry = ChannelDispatcherRegistry::new();
+    registry.register(Arc::new(TelegramConnector::new(
+        "TEST_BOT".to_string(),
+        "mock://telegram".to_string(),
+    )));
+    state.channel_dispatcher = Some(Arc::new(registry));
+    state.telegram_webhook_secret = Some("hook-secret".to_string());
+    state.telegram_enabled = true;
+
+    let app = router(state);
+    let payload = json!({
+        "update_id": 999,
+        "message": {
+            "message_id": 9,
+            "chat": {"id": 1001},
+            "from": {"id": 2002}
+        }
+    });
+
+    let res = app
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/api/channels/telegram/webhook")
+                .header("content-type", "application/json")
+                .header("x-telegram-bot-api-secret-token", "hook-secret")
+                .body(Body::from(payload.to_string()))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(res.status(), StatusCode::OK);
+    let body = to_bytes(res.into_body(), usize::MAX).await.unwrap();
+    let json: Value = serde_json::from_slice(&body).unwrap();
+    assert_eq!(json["ignored"], true);
 }

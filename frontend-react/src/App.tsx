@@ -12,13 +12,38 @@ import { ConversationPanel } from "./components/ConversationPanel";
 import { EventTimeline } from "./components/EventTimeline";
 import { MobilePaneTabs, type MobilePane } from "./components/MobilePaneTabs";
 import { SessionRail } from "./components/SessionRail";
-import type { AgentFileConfig, ChatStreamEnvelope, RuntimeError, SessionState } from "./contracts/protocol";
+import type {
+  AgentFileConfig,
+  ChannelStatusResponse,
+  ChatStreamEnvelope,
+  ConfigStateResponse,
+  RuntimeError,
+  SessionState,
+} from "./contracts/protocol";
 import { useLayoutAdapter } from "./layout/adapter";
 import { createRuntimeAdapter } from "./runtime";
 
 type StreamLog = {
   id: string;
   summary: string;
+};
+
+type TelegramConnectorDraft = {
+  enabled: boolean;
+  polling: boolean;
+  apiBaseUrl: string;
+  webhookSecret: string;
+  webhookBaseUrl: string;
+  botToken: string;
+};
+
+const EMPTY_TELEGRAM_DRAFT: TelegramConnectorDraft = {
+  enabled: false,
+  polling: false,
+  apiBaseUrl: "",
+  webhookSecret: "",
+  webhookBaseUrl: "",
+  botToken: "",
 };
 
 function asText(value: unknown): string {
@@ -41,11 +66,20 @@ function toRuntimeError(error: unknown): RuntimeError {
 
 function withUpdatedModel(config: AgentFileConfig, model: string): AgentFileConfig {
   return {
-    workspace: config.workspace,
-    server: { ...(config.server ?? {}) },
+    ...config,
     llm: { ...(config.llm ?? {}), model },
-    logging: { ...(config.logging ?? {}) },
-    secrets: { ...(config.secrets ?? {}) },
+  };
+}
+
+function telegramDraftFromConfig(config?: AgentFileConfig): TelegramConnectorDraft {
+  const telegram = config?.channels?.telegram;
+  return {
+    enabled: telegram?.enabled ?? false,
+    polling: telegram?.polling ?? false,
+    apiBaseUrl: telegram?.api_base_url ?? "",
+    webhookSecret: telegram?.webhook_secret ?? "",
+    webhookBaseUrl: telegram?.webhook_base_url ?? "",
+    botToken: config?.secrets?.telegram_bot_token ?? "",
   };
 }
 
@@ -55,6 +89,11 @@ export default function App() {
 
   const [baseUrl, setBaseUrl] = useState("http://127.0.0.1:3000");
   const [health, setHealth] = useState("pending");
+  const [channelStatus, setChannelStatus] = useState<ChannelStatusResponse | undefined>();
+  const [configState, setConfigState] = useState<ConfigStateResponse | undefined>();
+  const [telegramDraft, setTelegramDraft] = useState<TelegramConnectorDraft>(EMPTY_TELEGRAM_DRAFT);
+  const [configBusy, setConfigBusy] = useState(false);
+  const [configNotice, setConfigNotice] = useState<string | undefined>();
   const [sessions, setSessions] = useState<SessionState[]>([]);
   const [activeSessionId, setActiveSessionId] = useState<string | undefined>();
   const [draft, setDraft] = useState("");
@@ -73,6 +112,14 @@ export default function App() {
   async function refreshHealth() {
     const response = await runtime.health(baseUrl);
     setHealth(`${response.status} @ ${response.now}`);
+    const channels = await runtime.channelStatus(baseUrl);
+    setChannelStatus(channels);
+  }
+
+  async function refreshConfig() {
+    const state = await runtime.getConfig(baseUrl);
+    setConfigState(state);
+    setTelegramDraft(telegramDraftFromConfig(state.running));
   }
 
   async function reloadSessions() {
@@ -118,6 +165,104 @@ export default function App() {
       setRuntimeError(undefined);
     } catch (error) {
       setRuntimeError(toRuntimeError(error));
+    }
+  }
+
+  function updateTelegramDraft(patch: Partial<TelegramConnectorDraft>) {
+    setTelegramDraft((prev) => ({ ...prev, ...patch }));
+  }
+
+  async function handleApplyConnectorConfig() {
+    if (!configState || configBusy) {
+      return;
+    }
+
+    setConfigBusy(true);
+    setConfigNotice(undefined);
+
+    const webhookSecret = telegramDraft.webhookSecret.trim();
+    const webhookBaseUrl = telegramDraft.webhookBaseUrl.trim();
+    const apiBaseUrl = telegramDraft.apiBaseUrl.trim();
+    const botToken = telegramDraft.botToken.trim();
+
+    const nextConfig: AgentFileConfig = {
+      ...configState.running,
+      channels: {
+        ...configState.running.channels,
+        telegram: {
+          ...configState.running.channels.telegram,
+          enabled: telegramDraft.enabled,
+          polling: telegramDraft.polling,
+          webhook_secret: webhookSecret || undefined,
+          webhook_base_url: webhookBaseUrl || undefined,
+          api_base_url: apiBaseUrl || undefined,
+        },
+      },
+      secrets: {
+        ...configState.running.secrets,
+        telegram_bot_token: botToken || undefined,
+      },
+    };
+
+    try {
+      const response = await runtime.applyConfig(baseUrl, nextConfig);
+      setConfigState(response.state);
+      setTelegramDraft(telegramDraftFromConfig(response.state.running));
+      setConfigNotice("config.apply ok");
+      await refreshHealth();
+      setRuntimeError(undefined);
+    } catch (error) {
+      const message = String(error);
+      setConfigNotice(`config.apply failed: ${message}`);
+      setRuntimeError({ code: "UNKNOWN", message });
+    } finally {
+      setConfigBusy(false);
+    }
+  }
+
+  async function handleResetConfig() {
+    if (configBusy) {
+      return;
+    }
+
+    setConfigBusy(true);
+    setConfigNotice(undefined);
+    try {
+      const response = await runtime.resetConfig(baseUrl);
+      setConfigState(response.state);
+      setTelegramDraft(telegramDraftFromConfig(response.state.running));
+      setConfigNotice("config.reset ok");
+      await refreshHealth();
+      setRuntimeError(undefined);
+    } catch (error) {
+      const message = String(error);
+      setConfigNotice(`config.reset failed: ${message}`);
+      setRuntimeError({ code: "UNKNOWN", message });
+    } finally {
+      setConfigBusy(false);
+    }
+  }
+
+  async function handleRestartRuntime() {
+    if (configBusy) {
+      return;
+    }
+
+    setConfigBusy(true);
+    setConfigNotice(undefined);
+    try {
+      const response = await runtime.restartConfig(baseUrl);
+      setConfigState(response.state);
+      setTelegramDraft(telegramDraftFromConfig(response.state.running));
+      setConfigNotice(response.restart_scheduled ? "config.restart scheduled" : "config.restart accepted");
+      await refreshHealth();
+      setRuntimeError(undefined);
+    } catch (error) {
+      const message = String(error);
+      setConfigNotice(`config.restart failed: ${message}`);
+      setRuntimeError({ code: "UNKNOWN", message });
+    } finally {
+      setConfigBusy(false);
     }
   }
 
@@ -292,6 +437,7 @@ export default function App() {
     async function bootstrap() {
       try {
         await refreshHealth();
+        await refreshConfig();
         await reloadSessions();
         if (!cancelled) {
           setRuntimeError(undefined);
@@ -334,13 +480,22 @@ export default function App() {
             activeSessionId={activeSessionId}
             baseUrl={baseUrl}
             health={health}
+            channelStatus={channelStatus}
             transport={runtime.source}
             compact={layout.isMobile}
             onBaseUrlChange={setBaseUrl}
+            telegramDraft={telegramDraft}
+            configBusy={configBusy}
+            configNotice={configNotice}
             onSelectSession={setActiveSessionId}
             onCreateSession={() => void handleCreateSession()}
+            onTelegramDraftChange={updateTelegramDraft}
+            onApplyConnectorConfig={() => void handleApplyConnectorConfig()}
+            onResetConfig={() => void handleResetConfig()}
+            onRestartRuntime={() => void handleRestartRuntime()}
             onRefresh={() => {
               void refreshHealth();
+              void refreshConfig();
               void reloadSessions();
             }}
           />

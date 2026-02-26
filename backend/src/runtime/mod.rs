@@ -4,10 +4,14 @@ pub mod config_runtime;
 use anyhow::Result;
 use std::sync::Arc;
 use tokio::sync::RwLock;
+use tokio::time::{sleep, Duration};
 
+use crate::application::ChatService;
 use crate::application::agent::{AgentConfig, AgentLoop};
 use crate::domain::ports::{MemoryPort, ToolExecutorPort};
 use crate::interface::api::AppState;
+use crate::infrastructure::channels::build_dispatcher;
+use crate::infrastructure::channels::telegram::poll_updates_once;
 use crate::runtime::bootstrap::bootstrap_runtime_dirs;
 use crate::infrastructure::config::{workspace_base_for, AgentFileConfig, AppConfig};
 use crate::runtime::config_runtime::{AgentFactory, ConfigRuntime, RestartMode};
@@ -27,7 +31,17 @@ impl AgentFactory for BackendAgentFactory {
 
 pub async fn build_app(config: &AppConfig) -> Result<AppState> {
     let agent = build_agent_loop(config).await?;
-    Ok(AppState::new(agent))
+    let channel_dispatcher = build_dispatcher(config).await?;
+    let state = AppState::new(
+        agent,
+        channel_dispatcher,
+        config.telegram_webhook_secret.clone(),
+        config.telegram_enabled,
+        config.telegram_polling,
+        config.telegram_api_base_url.clone(),
+    );
+    maybe_spawn_telegram_poller(state.clone(), config);
+    Ok(state)
 }
 
 pub async fn build_app_with_config_runtime(
@@ -36,6 +50,7 @@ pub async fn build_app_with_config_runtime(
     restart_mode: RestartMode,
 ) -> Result<AppState> {
     let agent = build_agent_loop(config).await?;
+    let channel_dispatcher = build_dispatcher(config).await?;
     let agent_slot = Arc::new(RwLock::new(agent));
 
     let cwd = std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from("."));
@@ -51,7 +66,17 @@ pub async fn build_app_with_config_runtime(
         restart_mode,
     ));
 
-    Ok(AppState::with_config_runtime(agent_slot, runtime))
+    let state = AppState::with_config_runtime(
+        agent_slot,
+        runtime,
+        channel_dispatcher,
+        config.telegram_webhook_secret.clone(),
+        config.telegram_enabled,
+        config.telegram_polling,
+        config.telegram_api_base_url.clone(),
+    );
+    maybe_spawn_telegram_poller(state.clone(), config);
+    Ok(state)
 }
 
 pub async fn build_agent_loop(config: &AppConfig) -> Result<Arc<AgentLoop>> {
@@ -103,4 +128,61 @@ pub async fn shutdown_signal() {
         _ = ctrl_c => {},
         _ = terminate => {},
     }
+}
+
+fn maybe_spawn_telegram_poller(state: AppState, config: &AppConfig) {
+    if !config.telegram_enabled || !config.telegram_polling {
+        return;
+    }
+    let Some(bot_token) = config.telegram_bot_token.clone() else {
+        tracing::warn!(
+            "telegram polling enabled but no bot token configured; poller is not started"
+        );
+        return;
+    };
+
+    let api_base_url = config.telegram_api_base_url.clone();
+    tokio::spawn(async move {
+        let client = reqwest::Client::new();
+        let mut offset: i64 = 0;
+        tracing::info!(channel = "telegram", mode = "polling", "telegram poller started");
+
+        loop {
+            let updates = match poll_updates_once(&client, &api_base_url, &bot_token, offset, 15).await {
+                Ok(items) => items,
+                Err(error) => {
+                    tracing::warn!(channel = "telegram", mode = "polling", error = %error, "telegram poller request failed");
+                    sleep(Duration::from_secs(2)).await;
+                    continue;
+                }
+            };
+
+            if updates.is_empty() {
+                continue;
+            }
+
+            let service = ChatService::new(
+                state.agent.clone(),
+                state.sessions.clone(),
+                state.channel_dispatcher.clone(),
+            );
+
+            for update in updates {
+                if update.update_id + 1 > offset {
+                    offset = update.update_id + 1;
+                }
+                let Some(inbound) = update.into_inbound_message() else {
+                    continue;
+                };
+                if let Err(error) = service.run_channel_message(inbound).await {
+                    tracing::warn!(
+                        channel = "telegram",
+                        mode = "polling",
+                        error = %error.message(),
+                        "telegram poller failed to process inbound update"
+                    );
+                }
+            }
+        }
+    });
 }

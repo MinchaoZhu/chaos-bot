@@ -1,4 +1,5 @@
 pub mod config;
+pub mod channels;
 pub mod logging;
 pub mod memory;
 pub mod personality;

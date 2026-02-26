@@ -6,8 +6,8 @@ use async_trait::async_trait;
 use chaos_bot_backend::application::agent::{AgentConfig, AgentLoop};
 use chaos_bot_backend::interface::api::AppState;
 use chaos_bot_backend::infrastructure::config::{
-    write_config_file, AgentFileConfig, AgentLlmConfig, AgentLoggingConfig, AgentSecretsConfig,
-    AgentServerConfig, AppConfig, EnvSecrets,
+    write_config_file, AgentChannelsConfig, AgentFileConfig, AgentLlmConfig,
+    AgentLoggingConfig, AgentSecretsConfig, AgentServerConfig, AppConfig, EnvSecrets,
 };
 use chaos_bot_backend::runtime::config_runtime::{AgentFactory, ConfigRuntime, RestartMode};
 use chaos_bot_backend::infrastructure::model::{LlmProvider, LlmRequest, LlmResponse, LlmStream, LlmStreamEvent};
@@ -288,7 +288,14 @@ pub fn build_test_state_with_registry(
         default_agent_config(temp.path().to_path_buf()),
     );
 
-    let state = AppState::new(Arc::new(agent));
+    let state = AppState::new(
+        Arc::new(agent),
+        None,
+        None,
+        false,
+        false,
+        "https://api.telegram.org".to_string(),
+    );
 
     (temp, state)
 }
@@ -384,6 +391,7 @@ pub async fn build_test_state_with_config_runtime() -> (TempDir, AppState, PathB
             max_iterations: Some(6),
             token_budget: Some(12000),
         },
+        channels: AgentChannelsConfig::default(),
         secrets: AgentSecretsConfig::default(),
     };
 
@@ -413,7 +421,15 @@ pub async fn build_test_state_with_config_runtime() -> (TempDir, AppState, PathB
         RestartMode::Disabled,
     ));
 
-    let state = AppState::with_config_runtime(agent_slot, runtime);
+    let state = AppState::with_config_runtime(
+        agent_slot,
+        runtime,
+        None,
+        None,
+        false,
+        false,
+        "https://api.telegram.org".to_string(),
+    );
     (temp, state, config_path)
 }
 

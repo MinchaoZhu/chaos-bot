@@ -54,7 +54,14 @@ fn build_state() -> AppState {
         },
     );
 
-    AppState::new(Arc::new(agent))
+    AppState::new(
+        Arc::new(agent),
+        None,
+        None,
+        false,
+        false,
+        "https://api.telegram.org".to_string(),
+    )
 }
 
 #[tokio::test]

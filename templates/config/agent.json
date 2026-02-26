@@ -12,6 +12,13 @@
     "max_iterations": 6,
     "token_budget": 12000
   },
+  "channels": {
+    "telegram": {
+      "enabled": false,
+      "polling": false,
+      "api_base_url": "https://api.telegram.org"
+    }
+  },
   "logging": {
     "level": "info",
     "retention_days": 7,

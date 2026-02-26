@@ -1,5 +1,6 @@
 import type {
   AgentFileConfig,
+  ChannelStatusResponse,
   ChatRequest,
   ChatStreamEnvelope,
   ConfigMutationResponse,
@@ -98,6 +99,33 @@ export function createHttpAdapter(): RuntimeAdapter {
     async health(baseUrl: string): Promise<HealthResponse> {
       return requestJson<HealthResponse>(`${baseUrl}/api/health`);
     },
+    async channelStatus(baseUrl: string): Promise<ChannelStatusResponse> {
+      return requestJson<ChannelStatusResponse>(`${baseUrl}/api/channels/status`);
+    },
+    async getConfig(baseUrl: string): Promise<ConfigStateResponse> {
+      return requestJson<ConfigStateResponse>(`${baseUrl}/api/config`);
+    },
+    async applyConfig(baseUrl: string, config: AgentFileConfig): Promise<ConfigMutationResponse> {
+      return requestJson<ConfigMutationResponse>(`${baseUrl}/api/config/apply`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ config }),
+      });
+    },
+    async resetConfig(baseUrl: string): Promise<ConfigMutationResponse> {
+      return requestJson<ConfigMutationResponse>(`${baseUrl}/api/config/reset`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: "{}",
+      });
+    },
+    async restartConfig(baseUrl: string, config?: AgentFileConfig): Promise<ConfigMutationResponse> {
+      return requestJson<ConfigMutationResponse>(`${baseUrl}/api/config/restart`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(config ? { config } : {}),
+      });
+    },
     async listSessions(baseUrl: string): Promise<SessionState[]> {
       return requestJson<SessionState[]>(`${baseUrl}/api/sessions`);
     },
@@ -109,12 +137,6 @@ export function createHttpAdapter(): RuntimeAdapter {
     },
     async deleteSession(baseUrl: string, sessionId: string): Promise<void> {
       await requestWithoutBody(`${baseUrl}/api/sessions/${sessionId}`, { method: "DELETE" });
-    },
-    async getConfig(baseUrl: string): Promise<ConfigStateResponse> {
-      return requestJson<ConfigStateResponse>(`${baseUrl}/api/config`);
-    },
-    async applyConfig(baseUrl: string, config: AgentFileConfig): Promise<ConfigMutationResponse> {
-      return requestJsonWithBody<ConfigMutationResponse>(`${baseUrl}/api/config/apply`, { config });
     },
     async chatStream(baseUrl: string, request: ChatRequest, onEvent, onError): Promise<void> {
       let response: Response;

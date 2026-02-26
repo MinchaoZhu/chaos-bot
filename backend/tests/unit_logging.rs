@@ -1,6 +1,6 @@
 use chaos_bot_backend::infrastructure::config::{
-    AgentFileConfig, AgentLlmConfig, AgentLoggingConfig, AgentSecretsConfig, AgentServerConfig,
-    AppConfig, EnvSecrets,
+    AgentChannelsConfig, AgentFileConfig, AgentLlmConfig, AgentLoggingConfig,
+    AgentSecretsConfig, AgentServerConfig, AppConfig, EnvSecrets,
 };
 use chaos_bot_backend::domain::audit::{redact_json, redact_raw_json};
 use chaos_bot_backend::domain::{AppError, ErrorCode};
@@ -47,6 +47,7 @@ fn init_logging_writes_to_workspace_log_file() {
             },
             server: AgentServerConfig::default(),
             llm: AgentLlmConfig::default(),
+            channels: AgentChannelsConfig::default(),
             secrets: AgentSecretsConfig::default(),
         },
         EnvSecrets::default(),

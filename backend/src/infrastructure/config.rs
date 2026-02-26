@@ -20,10 +20,16 @@ pub struct AppConfig {
     pub openai_api_key: Option<String>,
     pub anthropic_api_key: Option<String>,
     pub gemini_api_key: Option<String>,
+    pub telegram_bot_token: Option<String>,
     pub temperature: f32,
     pub max_tokens: u32,
     pub max_iterations: usize,
     pub token_budget: u32,
+    pub telegram_enabled: bool,
+    pub telegram_webhook_secret: Option<String>,
+    pub telegram_webhook_base_url: Option<String>,
+    pub telegram_polling: bool,
+    pub telegram_api_base_url: String,
     pub workspace: PathBuf,
     pub config_path: PathBuf,
     pub log_level: String,
@@ -55,10 +61,16 @@ impl Default for AppConfig {
             openai_api_key: None,
             anthropic_api_key: None,
             gemini_api_key: None,
+            telegram_bot_token: None,
             temperature: 0.2,
             max_tokens: 1024,
             max_iterations: 6,
             token_budget: 12_000,
+            telegram_enabled: false,
+            telegram_webhook_secret: None,
+            telegram_webhook_base_url: None,
+            telegram_polling: false,
+            telegram_api_base_url: "https://api.telegram.org".to_string(),
             config_path: default_config_path_for_workspace(&workspace),
             log_level: "info".to_string(),
             log_retention_days: 7,
@@ -120,6 +132,7 @@ impl AppConfig {
         config.openai_api_key = env_secrets.openai_api_key;
         config.anthropic_api_key = env_secrets.anthropic_api_key;
         config.gemini_api_key = env_secrets.gemini_api_key;
+        config.telegram_bot_token = env_secrets.telegram_bot_token;
 
         if let Some(host) = file_config.server.host {
             config.host = host;
@@ -147,6 +160,22 @@ impl AppConfig {
             config.token_budget = token_budget;
         }
 
+        if let Some(enabled) = file_config.channels.telegram.enabled {
+            config.telegram_enabled = enabled;
+        }
+        if let Some(webhook_secret) = file_config.channels.telegram.webhook_secret {
+            config.telegram_webhook_secret = Some(webhook_secret);
+        }
+        if let Some(webhook_base_url) = file_config.channels.telegram.webhook_base_url {
+            config.telegram_webhook_base_url = Some(webhook_base_url);
+        }
+        if let Some(polling) = file_config.channels.telegram.polling {
+            config.telegram_polling = polling;
+        }
+        if let Some(api_base_url) = file_config.channels.telegram.api_base_url {
+            config.telegram_api_base_url = api_base_url;
+        }
+
         if let Some(workspace) = file_config.workspace {
             config.workspace = resolve_workspace_path(&workspace_base, workspace);
             config.derive_runtime_paths_from_workspace();
@@ -171,6 +200,9 @@ impl AppConfig {
         if let Some(gemini_api_key) = file_config.secrets.gemini_api_key {
             config.gemini_api_key = Some(gemini_api_key);
         }
+        if let Some(telegram_bot_token) = file_config.secrets.telegram_bot_token {
+            config.telegram_bot_token = Some(telegram_bot_token);
+        }
 
         config
     }
@@ -185,10 +217,16 @@ impl AppConfig {
             openai_api_key: None,
             anthropic_api_key: None,
             gemini_api_key: None,
+            telegram_bot_token: None,
             temperature: 0.2,
             max_tokens: 1024,
             max_iterations: 6,
             token_budget: 12_000,
+            telegram_enabled: false,
+            telegram_webhook_secret: None,
+            telegram_webhook_base_url: None,
+            telegram_polling: false,
+            telegram_api_base_url: "https://api.telegram.org".to_string(),
             config_path: default_config_path_for_workspace(&workspace),
             log_level: "info".to_string(),
             log_retention_days: 7,
@@ -215,6 +253,7 @@ pub struct EnvSecrets {
     pub openai_api_key: Option<String>,
     pub anthropic_api_key: Option<String>,
     pub gemini_api_key: Option<String>,
+    pub telegram_bot_token: Option<String>,
 }
 
 impl EnvSecrets {
@@ -223,6 +262,7 @@ impl EnvSecrets {
             openai_api_key: env::var("OPENAI_API_KEY").ok(),
             anthropic_api_key: env::var("ANTHROPIC_API_KEY").ok(),
             gemini_api_key: env::var("GEMINI_API_KEY").ok(),
+            telegram_bot_token: env::var("TELEGRAM_BOT_TOKEN").ok(),
         }
     }
 }
@@ -234,6 +274,7 @@ pub struct AgentFileConfig {
     pub logging: AgentLoggingConfig,
     pub server: AgentServerConfig,
     pub llm: AgentLlmConfig,
+    pub channels: AgentChannelsConfig,
     pub secrets: AgentSecretsConfig,
 }
 
@@ -265,10 +306,27 @@ pub struct AgentLoggingConfig {
 
 #[derive(Clone, Debug, Deserialize, Serialize, Default)]
 #[serde(default)]
+pub struct AgentChannelsConfig {
+    pub telegram: AgentTelegramConfig,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize, Default)]
+#[serde(default)]
+pub struct AgentTelegramConfig {
+    pub enabled: Option<bool>,
+    pub webhook_secret: Option<String>,
+    pub webhook_base_url: Option<String>,
+    pub polling: Option<bool>,
+    pub api_base_url: Option<String>,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize, Default)]
+#[serde(default)]
 pub struct AgentSecretsConfig {
     pub openai_api_key: Option<String>,
     pub anthropic_api_key: Option<String>,
     pub gemini_api_key: Option<String>,
+    pub telegram_bot_token: Option<String>,
 }
 
 impl AgentFileConfig {

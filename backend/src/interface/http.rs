@@ -1,14 +1,17 @@
 use crate::application::agent::AgentLoop;
 use crate::application::{ChatService, ConfigService, SessionService};
 use crate::domain::chat::{ChatCommand, ChatEvent, ToolEvent};
+use crate::domain::ports::ChannelDispatcherPort;
 use crate::domain::config::{
     ConfigMutationInput, ConfigMutationResponse, ConfigRestartInput, ConfigStateResponse,
 };
-use crate::infrastructure::config::AgentFileConfig;
 use crate::domain::AppError;
 use crate::domain::types::SessionState;
+use crate::infrastructure::channels::telegram::TelegramWebhookUpdate;
+use crate::infrastructure::config::AgentFileConfig;
 use crate::infrastructure::session_store::SessionStore;
 use crate::runtime::config_runtime::ConfigRuntime;
+use axum::http::HeaderMap;
 use axum::extract::{Path, State};
 use axum::response::sse::{Event, KeepAlive, Sse};
 use axum::routing::{get, post};
@@ -28,25 +31,52 @@ pub struct AppState {
     pub agent: Arc<RwLock<Arc<AgentLoop>>>,
     pub sessions: SessionStore,
     pub config_runtime: Option<Arc<ConfigRuntime>>,
+    pub channel_dispatcher: Option<Arc<dyn ChannelDispatcherPort>>,
+    pub telegram_webhook_secret: Option<String>,
+    pub telegram_enabled: bool,
+    pub telegram_polling: bool,
+    pub telegram_api_base_url: String,
 }
 
 impl AppState {
-    pub fn new(agent: Arc<AgentLoop>) -> Self {
+    pub fn new(
+        agent: Arc<AgentLoop>,
+        channel_dispatcher: Option<Arc<dyn ChannelDispatcherPort>>,
+        telegram_webhook_secret: Option<String>,
+        telegram_enabled: bool,
+        telegram_polling: bool,
+        telegram_api_base_url: String,
+    ) -> Self {
         Self {
             agent: Arc::new(RwLock::new(agent)),
             sessions: SessionStore::new(),
             config_runtime: None,
+            channel_dispatcher,
+            telegram_webhook_secret,
+            telegram_enabled,
+            telegram_polling,
+            telegram_api_base_url,
         }
     }
 
     pub fn with_config_runtime(
         agent: Arc<RwLock<Arc<AgentLoop>>>,
         config_runtime: Arc<ConfigRuntime>,
+        channel_dispatcher: Option<Arc<dyn ChannelDispatcherPort>>,
+        telegram_webhook_secret: Option<String>,
+        telegram_enabled: bool,
+        telegram_polling: bool,
+        telegram_api_base_url: String,
     ) -> Self {
         Self {
             agent,
             sessions: SessionStore::new(),
             config_runtime: Some(config_runtime),
+            channel_dispatcher,
+            telegram_webhook_secret,
+            telegram_enabled,
+            telegram_polling,
+            telegram_api_base_url,
         }
     }
 
@@ -73,10 +103,34 @@ pub struct ConfigMutationRequest {
     pub config: Option<AgentFileConfig>,
 }
 
+#[derive(Debug, Serialize)]
+pub struct TelegramWebhookResponse {
+    pub ok: bool,
+    pub ignored: bool,
+    pub session_id: Option<String>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct ChannelStatusResponse {
+    pub enabled_channels: Vec<String>,
+    pub connectors: Vec<crate::domain::chat::ChannelHealth>,
+    pub telegram: TelegramChannelStatus,
+}
+
+#[derive(Debug, Serialize)]
+pub struct TelegramChannelStatus {
+    pub enabled: bool,
+    pub polling: bool,
+    pub api_base_url: String,
+    pub webhook_secret_configured: bool,
+}
+
 pub fn router(state: AppState) -> Router {
     Router::new()
         .route("/api/health", get(health))
+        .route("/api/channels/status", get(channel_status))
         .route("/api/chat", post(chat))
+        .route("/api/channels/telegram/webhook", post(telegram_webhook))
         .route("/api/sessions", post(create_session).get(list_sessions))
         .route("/api/sessions/:id", get(get_session).delete(delete_session))
         .route("/api/config", get(get_config))
@@ -91,6 +145,32 @@ async fn health() -> Json<HealthResponse> {
         status: "ok",
         now: Utc::now().to_rfc3339(),
     })
+}
+
+async fn channel_status(
+    State(state): State<AppState>,
+) -> Result<Json<ChannelStatusResponse>, AppError> {
+    let (enabled_channels, connectors) = if let Some(dispatcher) = &state.channel_dispatcher {
+        let channels = dispatcher.enabled_channels();
+        let health = dispatcher
+            .health_summary()
+            .await
+            .map_err(|error| AppError::internal(format!("failed to load channel health: {error}")))?;
+        (channels, health)
+    } else {
+        (Vec::new(), Vec::new())
+    };
+
+    Ok(Json(ChannelStatusResponse {
+        enabled_channels,
+        connectors,
+        telegram: TelegramChannelStatus {
+            enabled: state.telegram_enabled,
+            polling: state.telegram_polling,
+            api_base_url: state.telegram_api_base_url.clone(),
+            webhook_secret_configured: state.telegram_webhook_secret.is_some(),
+        },
+    }))
 }
 
 async fn create_session(State(state): State<AppState>) -> Json<SessionState> {
@@ -138,12 +218,17 @@ async fn chat(
             let _ = tx.send(Ok(event));
         };
 
-        let service = ChatService::new(state.agent.clone(), state.sessions.clone());
+        let service = ChatService::new(
+            state.agent.clone(),
+            state.sessions.clone(),
+            state.channel_dispatcher.clone(),
+        );
         let result = service
             .run_stream(
                 ChatCommand {
                     session_id: payload.session_id,
                     message: payload.message,
+                    channel: None,
                 },
                 |event| send_event(chat_event_to_sse(event)),
             )
@@ -181,6 +266,48 @@ async fn chat(
             .interval(Duration::from_secs(15))
             .text("keepalive"),
     )
+}
+
+async fn telegram_webhook(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Json(update): Json<TelegramWebhookUpdate>,
+) -> Result<Json<TelegramWebhookResponse>, AppError> {
+    if state.channel_dispatcher.is_none() {
+        return Err(AppError::service_unavailable(
+            "channel dispatcher unavailable",
+        ));
+    }
+
+    if let Some(expected) = &state.telegram_webhook_secret {
+        let provided = headers
+            .get("x-telegram-bot-api-secret-token")
+            .and_then(|value| value.to_str().ok());
+        if provided != Some(expected.as_str()) {
+            return Err(AppError::bad_request("invalid telegram webhook secret"));
+        }
+    }
+
+    let Some(inbound) = update.into_inbound_message() else {
+        return Ok(Json(TelegramWebhookResponse {
+            ok: true,
+            ignored: true,
+            session_id: None,
+        }));
+    };
+
+    let service = ChatService::new(
+        state.agent.clone(),
+        state.sessions.clone(),
+        state.channel_dispatcher.clone(),
+    );
+    let result = service.run_channel_message(inbound).await?;
+
+    Ok(Json(TelegramWebhookResponse {
+        ok: true,
+        ignored: false,
+        session_id: Some(result.session_id),
+    }))
 }
 
 async fn get_config(State(state): State<AppState>) -> Result<Json<ConfigStateResponse>, AppError> {

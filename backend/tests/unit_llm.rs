@@ -1,7 +1,30 @@
 use chaos_bot_backend::infrastructure::model::*;
+use chaos_bot_backend::infrastructure::config::AppConfig;
 use chaos_bot_backend::domain::types::*;
 use serde_json::json;
 use std::collections::{HashMap, VecDeque};
+
+fn test_app_config(provider: &str, model: &str) -> AppConfig {
+    let mut config = AppConfig::default();
+    config.host = "0.0.0.0".to_string();
+    config.port = 3000;
+    config.provider = provider.to_string();
+    config.model = model.to_string();
+    config.temperature = 0.0;
+    config.max_tokens = 128;
+    config.max_iterations = 1;
+    config.token_budget = 1024;
+    config.workspace = std::path::PathBuf::from(".");
+    config.config_path = std::path::PathBuf::from("config.json");
+    config.log_level = "info".to_string();
+    config.log_retention_days = 7;
+    config.log_dir = std::path::PathBuf::from(".");
+    config.working_dir = std::path::PathBuf::from(".");
+    config.personality_dir = std::path::PathBuf::from(".");
+    config.memory_dir = std::path::PathBuf::from(".");
+    config.memory_file = std::path::PathBuf::from(".");
+    config
+}
 
 // -------------------------------------------------------------------------
 // map_messages
@@ -389,142 +412,32 @@ fn flush_tool_calls_invalid_json_args_wrapped() {
 
 #[test]
 fn build_provider_mock() {
-    use chaos_bot_backend::infrastructure::config::AppConfig;
-    let config = AppConfig {
-        host: "0.0.0.0".into(),
-        port: 3000,
-        provider: "mock".into(),
-        model: "mock".into(),
-        openai_api_key: None,
-        anthropic_api_key: None,
-        gemini_api_key: None,
-        temperature: 0.0,
-        max_tokens: 128,
-        max_iterations: 1,
-        token_budget: 1024,
-        workspace: std::path::PathBuf::from("."),
-        config_path: std::path::PathBuf::from("config.json"),
-        log_level: "info".into(),
-        log_retention_days: 7,
-        log_dir: std::path::PathBuf::from("."),
-        working_dir: std::path::PathBuf::from("."),
-        personality_dir: std::path::PathBuf::from("."),
-        memory_dir: std::path::PathBuf::from("."),
-        memory_file: std::path::PathBuf::from("."),
-    };
+    let config = test_app_config("mock", "mock");
     let provider = build_provider(&config).unwrap();
     assert_eq!(provider.name(), "mock");
 }
 
 #[test]
 fn build_provider_unsupported() {
-    use chaos_bot_backend::infrastructure::config::AppConfig;
-    let config = AppConfig {
-        host: "0.0.0.0".into(),
-        port: 3000,
-        provider: "unknown".into(),
-        model: "x".into(),
-        openai_api_key: None,
-        anthropic_api_key: None,
-        gemini_api_key: None,
-        temperature: 0.0,
-        max_tokens: 128,
-        max_iterations: 1,
-        token_budget: 1024,
-        workspace: std::path::PathBuf::from("."),
-        config_path: std::path::PathBuf::from("config.json"),
-        log_level: "info".into(),
-        log_retention_days: 7,
-        log_dir: std::path::PathBuf::from("."),
-        working_dir: std::path::PathBuf::from("."),
-        personality_dir: std::path::PathBuf::from("."),
-        memory_dir: std::path::PathBuf::from("."),
-        memory_file: std::path::PathBuf::from("."),
-    };
+    let config = test_app_config("unknown", "x");
     assert!(build_provider(&config).is_err());
 }
 
 #[test]
 fn build_provider_openai_without_key_errors() {
-    use chaos_bot_backend::infrastructure::config::AppConfig;
-    let config = AppConfig {
-        host: "0.0.0.0".into(),
-        port: 3000,
-        provider: "openai".into(),
-        model: "gpt-4o".into(),
-        openai_api_key: None,
-        anthropic_api_key: None,
-        gemini_api_key: None,
-        temperature: 0.0,
-        max_tokens: 128,
-        max_iterations: 1,
-        token_budget: 1024,
-        workspace: std::path::PathBuf::from("."),
-        config_path: std::path::PathBuf::from("config.json"),
-        log_level: "info".into(),
-        log_retention_days: 7,
-        log_dir: std::path::PathBuf::from("."),
-        working_dir: std::path::PathBuf::from("."),
-        personality_dir: std::path::PathBuf::from("."),
-        memory_dir: std::path::PathBuf::from("."),
-        memory_file: std::path::PathBuf::from("."),
-    };
+    let config = test_app_config("openai", "gpt-4o");
     assert!(build_provider(&config).is_err());
 }
 
 #[test]
 fn build_provider_anthropic_without_key_errors() {
-    use chaos_bot_backend::infrastructure::config::AppConfig;
-    let config = AppConfig {
-        host: "0.0.0.0".into(),
-        port: 3000,
-        provider: "anthropic".into(),
-        model: "claude".into(),
-        openai_api_key: None,
-        anthropic_api_key: None,
-        gemini_api_key: None,
-        temperature: 0.0,
-        max_tokens: 128,
-        max_iterations: 1,
-        token_budget: 1024,
-        workspace: std::path::PathBuf::from("."),
-        config_path: std::path::PathBuf::from("config.json"),
-        log_level: "info".into(),
-        log_retention_days: 7,
-        log_dir: std::path::PathBuf::from("."),
-        working_dir: std::path::PathBuf::from("."),
-        personality_dir: std::path::PathBuf::from("."),
-        memory_dir: std::path::PathBuf::from("."),
-        memory_file: std::path::PathBuf::from("."),
-    };
+    let config = test_app_config("anthropic", "claude");
     assert!(build_provider(&config).is_err());
 }
 
 #[test]
 fn build_provider_gemini_without_key_errors() {
-    use chaos_bot_backend::infrastructure::config::AppConfig;
-    let config = AppConfig {
-        host: "0.0.0.0".into(),
-        port: 3000,
-        provider: "gemini".into(),
-        model: "gemini-pro".into(),
-        openai_api_key: None,
-        anthropic_api_key: None,
-        gemini_api_key: None,
-        temperature: 0.0,
-        max_tokens: 128,
-        max_iterations: 1,
-        token_budget: 1024,
-        workspace: std::path::PathBuf::from("."),
-        config_path: std::path::PathBuf::from("config.json"),
-        log_level: "info".into(),
-        log_retention_days: 7,
-        log_dir: std::path::PathBuf::from("."),
-        working_dir: std::path::PathBuf::from("."),
-        personality_dir: std::path::PathBuf::from("."),
-        memory_dir: std::path::PathBuf::from("."),
-        memory_file: std::path::PathBuf::from("."),
-    };
+    let config = test_app_config("gemini", "gemini-pro");
     assert!(build_provider(&config).is_err());
 }
 
@@ -536,28 +449,7 @@ fn build_provider_gemini_without_key_errors() {
 async fn mock_provider_chat_stream_text() {
     use futures::StreamExt;
 
-    let config = chaos_bot_backend::infrastructure::config::AppConfig {
-        host: "0.0.0.0".into(),
-        port: 3000,
-        provider: "mock".into(),
-        model: "mock".into(),
-        openai_api_key: None,
-        anthropic_api_key: None,
-        gemini_api_key: None,
-        temperature: 0.0,
-        max_tokens: 128,
-        max_iterations: 1,
-        token_budget: 1024,
-        workspace: std::path::PathBuf::from("."),
-        config_path: std::path::PathBuf::from("config.json"),
-        log_level: "info".into(),
-        log_retention_days: 7,
-        log_dir: std::path::PathBuf::from("."),
-        working_dir: std::path::PathBuf::from("."),
-        personality_dir: std::path::PathBuf::from("."),
-        memory_dir: std::path::PathBuf::from("."),
-        memory_file: std::path::PathBuf::from("."),
-    };
+    let config = test_app_config("mock", "mock");
     let provider = build_provider(&config).unwrap();
 
     let request = LlmRequest {
@@ -587,28 +479,7 @@ async fn mock_provider_chat_stream_text() {
 async fn mock_provider_chat_stream_tool_call() {
     use futures::StreamExt;
 
-    let config = chaos_bot_backend::infrastructure::config::AppConfig {
-        host: "0.0.0.0".into(),
-        port: 3000,
-        provider: "mock".into(),
-        model: "mock".into(),
-        openai_api_key: None,
-        anthropic_api_key: None,
-        gemini_api_key: None,
-        temperature: 0.0,
-        max_tokens: 128,
-        max_iterations: 1,
-        token_budget: 1024,
-        workspace: std::path::PathBuf::from("."),
-        config_path: std::path::PathBuf::from("config.json"),
-        log_level: "info".into(),
-        log_retention_days: 7,
-        log_dir: std::path::PathBuf::from("."),
-        working_dir: std::path::PathBuf::from("."),
-        personality_dir: std::path::PathBuf::from("."),
-        memory_dir: std::path::PathBuf::from("."),
-        memory_file: std::path::PathBuf::from("."),
-    };
+    let config = test_app_config("mock", "mock");
     let provider = build_provider(&config).unwrap();
 
     let request = LlmRequest {

@@ -4,28 +4,25 @@ use std::path::PathBuf;
 use tempfile::tempdir;
 
 fn make_config(root: PathBuf, personality_dir: PathBuf) -> AppConfig {
-    AppConfig {
-        host: "127.0.0.1".to_string(),
-        port: 3000,
-        provider: "mock".to_string(),
-        model: "mock-model".to_string(),
-        openai_api_key: None,
-        anthropic_api_key: None,
-        gemini_api_key: None,
-        temperature: 0.2,
-        max_tokens: 256,
-        max_iterations: 3,
-        token_budget: 2_000,
-        workspace: root.clone(),
-        config_path: root.join("config.json"),
-        log_level: "info".to_string(),
-        log_retention_days: 7,
-        log_dir: root.join("logs"),
-        working_dir: root.clone(),
-        personality_dir,
-        memory_dir: root.join("memory"),
-        memory_file: root.join("MEMORY.md"),
-    }
+    let mut config = AppConfig::default();
+    config.host = "127.0.0.1".to_string();
+    config.port = 3000;
+    config.provider = "mock".to_string();
+    config.model = "mock-model".to_string();
+    config.temperature = 0.2;
+    config.max_tokens = 256;
+    config.max_iterations = 3;
+    config.token_budget = 2_000;
+    config.workspace = root.clone();
+    config.config_path = root.join("config.json");
+    config.log_level = "info".to_string();
+    config.log_retention_days = 7;
+    config.log_dir = root.join("logs");
+    config.working_dir = root.clone();
+    config.personality_dir = personality_dir;
+    config.memory_dir = root.join("memory");
+    config.memory_file = root.join("MEMORY.md");
+    config
 }
 
 #[tokio::test]

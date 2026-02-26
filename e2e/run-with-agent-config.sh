@@ -26,13 +26,23 @@ cat >"${CONFIG_FILE}" <<EOF_CONFIG
     "max_iterations": 6,
     "token_budget": 12000
   },
+  "channels": {
+    "telegram": {
+      "enabled": true,
+      "webhook_secret": "e2e-telegram-secret",
+      "polling": false,
+      "api_base_url": "mock://telegram"
+    }
+  },
   "workspace": "${RUNTIME_WORK_DIR}",
   "logging": {
     "level": "info",
     "retention_days": 7,
     "directory": "logs"
   },
-  "secrets": {}
+  "secrets": {
+    "telegram_bot_token": "e2e-telegram-bot-token"
+  }
 }
 EOF_CONFIG
 

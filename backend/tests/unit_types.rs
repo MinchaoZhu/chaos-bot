@@ -1,4 +1,5 @@
 use chaos_bot_backend::domain::types::*;
+use chaos_bot_backend::domain::chat::{ChannelContext, ChannelDelivery, InboundChannelMessage, OutboundChannelMessage};
 use pretty_assertions::assert_eq;
 
 #[test]
@@ -169,4 +170,57 @@ fn message_skip_serializing_none_fields() {
     let json = serde_json::to_string(&msg).unwrap();
     assert!(!json.contains("name"));
     assert!(!json.contains("tool_call_id"));
+}
+
+#[test]
+fn channel_context_serde_roundtrip() {
+    let context = ChannelContext {
+        channel: "telegram".to_string(),
+        user_id: "user-1".to_string(),
+        conversation_id: "chat-1".to_string(),
+    };
+    let json = serde_json::to_string(&context).unwrap();
+    let back: ChannelContext = serde_json::from_str(&json).unwrap();
+    assert_eq!(back.channel, "telegram");
+}
+
+#[test]
+fn inbound_channel_message_serde_roundtrip() {
+    let message = InboundChannelMessage {
+        channel: "telegram".to_string(),
+        user_id: "42".to_string(),
+        conversation_id: "100".to_string(),
+        message_id: Some("7".to_string()),
+        text: "hello".to_string(),
+        metadata: serde_json::json!({"k":"v"}),
+    };
+    let json = serde_json::to_string(&message).unwrap();
+    let back: InboundChannelMessage = serde_json::from_str(&json).unwrap();
+    assert_eq!(back.text, "hello");
+}
+
+#[test]
+fn outbound_channel_message_serde_roundtrip() {
+    let message = OutboundChannelMessage {
+        channel: "telegram".to_string(),
+        user_id: "42".to_string(),
+        conversation_id: "100".to_string(),
+        session_id: "s-1".to_string(),
+        text: "reply".to_string(),
+        metadata: serde_json::json!({}),
+    };
+    let json = serde_json::to_string(&message).unwrap();
+    let back: OutboundChannelMessage = serde_json::from_str(&json).unwrap();
+    assert_eq!(back.session_id, "s-1");
+}
+
+#[test]
+fn channel_delivery_serde_roundtrip() {
+    let delivery = ChannelDelivery {
+        channel: "telegram".to_string(),
+        external_message_id: Some("99".to_string()),
+    };
+    let json = serde_json::to_string(&delivery).unwrap();
+    let back: ChannelDelivery = serde_json::from_str(&json).unwrap();
+    assert_eq!(back.external_message_id.as_deref(), Some("99"));
 }

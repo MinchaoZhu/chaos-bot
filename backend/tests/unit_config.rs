@@ -1,6 +1,7 @@
 use chaos_bot_backend::infrastructure::config::{
-    default_config_path_for_workspace, default_workspace_path, AgentFileConfig, AgentLlmConfig,
-    AgentLoggingConfig, AgentSecretsConfig, AgentServerConfig, AppConfig, EnvSecrets,
+    default_config_path_for_workspace, default_workspace_path, AgentChannelsConfig,
+    AgentFileConfig, AgentLlmConfig, AgentLoggingConfig, AgentSecretsConfig, AgentServerConfig,
+    AgentTelegramConfig, AppConfig, EnvSecrets,
 };
 use serial_test::serial;
 use std::path::{Path, PathBuf};
@@ -64,6 +65,7 @@ fn clear_envs() {
         "OPENAI_API_KEY",
         "ANTHROPIC_API_KEY",
         "GEMINI_API_KEY",
+        "TELEGRAM_BOT_TOKEN",
         "AGENT_CONFIG_PATH",
     ] {
         std::env::remove_var(key);
@@ -322,16 +324,19 @@ fn from_inputs_supports_injected_config_source() {
             max_iterations: Some(2),
             token_budget: Some(4096),
         },
+        channels: AgentChannelsConfig::default(),
         secrets: AgentSecretsConfig {
             openai_api_key: Some("json-key".to_string()),
             anthropic_api_key: None,
             gemini_api_key: None,
+            telegram_bot_token: Some("telegram-json".to_string()),
         },
     };
     let env_secrets = EnvSecrets {
         openai_api_key: Some("env-key".to_string()),
         anthropic_api_key: None,
         gemini_api_key: None,
+        telegram_bot_token: Some("telegram-env".to_string()),
     };
 
     let config = AppConfig::from_inputs(file_config, env_secrets, home.clone());
@@ -341,6 +346,7 @@ fn from_inputs_supports_injected_config_source() {
     assert_eq!(config.provider, "mock");
     assert_eq!(config.model, "m");
     assert_eq!(config.openai_api_key.as_deref(), Some("json-key"));
+    assert_eq!(config.telegram_bot_token.as_deref(), Some("telegram-json"));
     assert_eq!(config.workspace, home.join("wd"));
     assert_eq!(config.log_level, "debug");
     assert_eq!(config.log_retention_days, 3);
@@ -349,4 +355,51 @@ fn from_inputs_supports_injected_config_source() {
     assert_eq!(config.personality_dir, home.join("wd/personality"));
     assert_eq!(config.memory_dir, home.join("wd/memory"));
     assert_eq!(config.memory_file, home.join("wd/MEMORY.md"));
+}
+
+#[test]
+#[serial]
+fn from_inputs_applies_telegram_channel_and_secret_settings() {
+    let home = std::path::PathBuf::from("/tmp/home-base-telegram");
+    let file_config = AgentFileConfig {
+        workspace: Some(std::path::PathBuf::from("./wd")),
+        logging: AgentLoggingConfig::default(),
+        server: AgentServerConfig::default(),
+        llm: AgentLlmConfig::default(),
+        channels: AgentChannelsConfig {
+            telegram: AgentTelegramConfig {
+                enabled: Some(true),
+                webhook_secret: Some("secret-123".to_string()),
+                webhook_base_url: Some("https://example.test/hook".to_string()),
+                polling: Some(false),
+                api_base_url: Some("https://telegram.example".to_string()),
+            },
+        },
+        secrets: AgentSecretsConfig {
+            openai_api_key: None,
+            anthropic_api_key: None,
+            gemini_api_key: None,
+            telegram_bot_token: Some("bot-token-json".to_string()),
+        },
+    };
+    let env_secrets = EnvSecrets {
+        openai_api_key: None,
+        anthropic_api_key: None,
+        gemini_api_key: None,
+        telegram_bot_token: Some("bot-token-env".to_string()),
+    };
+
+    let config = AppConfig::from_inputs(file_config, env_secrets, home);
+
+    assert!(config.telegram_enabled);
+    assert_eq!(config.telegram_webhook_secret.as_deref(), Some("secret-123"));
+    assert_eq!(
+        config.telegram_webhook_base_url.as_deref(),
+        Some("https://example.test/hook")
+    );
+    assert_eq!(
+        config.telegram_api_base_url,
+        "https://telegram.example".to_string()
+    );
+    assert_eq!(config.telegram_bot_token.as_deref(), Some("bot-token-json"));
 }
