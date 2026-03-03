@@ -195,7 +195,11 @@ impl AgentLoop {
                 }
             }
 
-            let assistant_message = Message::assistant(assistant_content.clone());
+            let assistant_message = if tool_calls.is_empty() {
+                Message::assistant(assistant_content.clone())
+            } else {
+                Message::assistant_with_tool_calls(assistant_content.clone(), tool_calls.clone())
+            };
             session.push_message(assistant_message.clone());
             messages.push(assistant_message.clone());
 

@@ -221,7 +221,20 @@ impl OpenAiProvider {
             .map(|message| match message.role {
                 Role::System => json!({"role": "system", "content": message.content}),
                 Role::User => json!({"role": "user", "content": message.content}),
-                Role::Assistant => json!({"role": "assistant", "content": message.content}),
+                Role::Assistant => {
+                    let mut obj = json!({"role": "assistant", "content": message.content});
+                    if let Some(ref calls) = message.tool_calls {
+                        obj["tool_calls"] = json!(calls.iter().map(|tc| json!({
+                            "id": tc.id,
+                            "type": "function",
+                            "function": {
+                                "name": tc.name,
+                                "arguments": tc.arguments.to_string()
+                            }
+                        })).collect::<Vec<_>>());
+                    }
+                    obj
+                }
                 Role::Tool => json!({
                     "role": "tool",
                     "content": message.content,
