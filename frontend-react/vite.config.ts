@@ -6,7 +6,7 @@ const backendProxyTarget = process.env.VITE_BACKEND_PROXY_TARGET ?? "http://127.
 export default defineConfig({
   plugins: [react()],
   server: {
-    host: "0.0.0.0",
+    host: "::",
     port: 1420,
     strictPort: true,
     proxy: {
@@ -17,7 +17,7 @@ export default defineConfig({
     },
   },
   preview: {
-    host: "0.0.0.0",
+    host: "::",
     port: 4173,
     strictPort: true,
   },
