@@ -3,12 +3,15 @@ import type {
   ChannelStatusResponse,
   ChatRequest,
   ChatStreamEnvelope,
+  ConfigMutationRequest,
   ConfigMutationResponse,
   ConfigStateResponse,
   HealthResponse,
   RuntimeError,
   RuntimeErrorCode,
   SessionState,
+  SkillDetail,
+  SkillMeta,
   StreamEventType,
 } from "../contracts/protocol";
 import type { RuntimeAdapter } from "./adapter";
@@ -81,18 +84,6 @@ async function requestWithoutBody(url: string, init?: RequestInit): Promise<void
   }
 }
 
-async function requestJsonWithBody<T>(url: string, body: unknown, init?: RequestInit): Promise<T> {
-  return requestJson<T>(url, {
-    ...init,
-    method: init?.method ?? "POST",
-    headers: {
-      "content-type": "application/json",
-      ...(init?.headers ?? {}),
-    },
-    body: JSON.stringify(body),
-  });
-}
-
 export function createHttpAdapter(): RuntimeAdapter {
   return {
     source: "http",
@@ -105,11 +96,11 @@ export function createHttpAdapter(): RuntimeAdapter {
     async getConfig(baseUrl: string): Promise<ConfigStateResponse> {
       return requestJson<ConfigStateResponse>(`${baseUrl}/api/config`);
     },
-    async applyConfig(baseUrl: string, config: AgentFileConfig): Promise<ConfigMutationResponse> {
+    async applyConfig(baseUrl: string, req: ConfigMutationRequest): Promise<ConfigMutationResponse> {
       return requestJson<ConfigMutationResponse>(`${baseUrl}/api/config/apply`, {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ config }),
+        body: JSON.stringify(req),
       });
     },
     async resetConfig(baseUrl: string): Promise<ConfigMutationResponse> {
@@ -137,6 +128,12 @@ export function createHttpAdapter(): RuntimeAdapter {
     },
     async deleteSession(baseUrl: string, sessionId: string): Promise<void> {
       await requestWithoutBody(`${baseUrl}/api/sessions/${sessionId}`, { method: "DELETE" });
+    },
+    async listSkills(baseUrl: string): Promise<SkillMeta[]> {
+      return requestJson<SkillMeta[]>(`${baseUrl}/api/skills`);
+    },
+    async getSkill(baseUrl: string, skillId: string): Promise<SkillDetail> {
+      return requestJson<SkillDetail>(`${baseUrl}/api/skills/${skillId}`);
     },
     async chatStream(baseUrl: string, request: ChatRequest, onEvent, onError): Promise<void> {
       let response: Response;

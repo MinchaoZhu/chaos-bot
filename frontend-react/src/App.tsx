@@ -8,10 +8,12 @@ import {
   type ParsedSlashCommand,
   type SlashCommandSpec,
 } from "./commands/slash";
+import { ConfigPanel } from "./components/ConfigPanel";
 import { ConversationPanel } from "./components/ConversationPanel";
 import { EventTimeline } from "./components/EventTimeline";
 import { MobilePaneTabs, type MobilePane } from "./components/MobilePaneTabs";
 import { SessionRail } from "./components/SessionRail";
+import { SkillsPanel } from "./components/SkillsPanel";
 import type {
   AgentFileConfig,
   ChannelStatusResponse,
@@ -46,11 +48,40 @@ const EMPTY_TELEGRAM_DRAFT: TelegramConnectorDraft = {
   botToken: "",
 };
 
+type DesktopSidePane = "events" | "config" | "skills";
+
+function resolveDefaultBaseUrl(): string {
+  if (typeof window === "undefined") {
+    return "http://127.0.0.1:3000";
+  }
+
+  if (window.__TAURI_INTERNALS__) {
+    return "http://127.0.0.1:3000";
+  }
+
+  if (window.location.protocol === "http:" || window.location.protocol === "https:") {
+    return window.location.origin;
+  }
+
+  return "http://127.0.0.1:3000";
+}
+
 function asText(value: unknown): string {
   if (typeof value === "string") {
     return value;
   }
-  return JSON.stringify(value);
+  return JSON.stringify(value) ?? String(value);
+}
+
+function asRuntimeError(value: unknown): RuntimeError {
+  if (value && typeof value === "object") {
+    const code = (value as { code?: string }).code;
+    const message = (value as { message?: string }).message;
+    if (typeof code === "string" && typeof message === "string") {
+      return { code: code as RuntimeError["code"], message };
+    }
+  }
+  return { code: "UNKNOWN", message: asText(value) };
 }
 
 function toRuntimeError(error: unknown): RuntimeError {
@@ -87,7 +118,7 @@ export default function App() {
   const runtime = useMemo(() => createRuntimeAdapter(), []);
   const layout = useLayoutAdapter();
 
-  const [baseUrl, setBaseUrl] = useState("http://127.0.0.1:3000");
+  const [baseUrl, setBaseUrl] = useState(resolveDefaultBaseUrl);
   const [health, setHealth] = useState("pending");
   const [channelStatus, setChannelStatus] = useState<ChannelStatusResponse | undefined>();
   const [configState, setConfigState] = useState<ConfigStateResponse | undefined>();
@@ -101,6 +132,7 @@ export default function App() {
   const [streamLogs, setStreamLogs] = useState<StreamLog[]>([]);
   const [runtimeError, setRuntimeError] = useState<RuntimeError | undefined>();
   const [mobilePane, setMobilePane] = useState<MobilePane>("chat");
+  const [desktopSidePane, setDesktopSidePane] = useState<DesktopSidePane>("events");
 
   const activeSession = sessions.find((session) => session.id === activeSessionId);
   const commandHints = useMemo(() => getSlashCommandHints(draft), [draft]);
@@ -205,7 +237,7 @@ export default function App() {
     };
 
     try {
-      const response = await runtime.applyConfig(baseUrl, nextConfig);
+      const response = await runtime.applyConfig(baseUrl, { config: nextConfig });
       setConfigState(response.state);
       setTelegramDraft(telegramDraftFromConfig(response.state.running));
       setConfigNotice("config.apply ok");
@@ -325,7 +357,7 @@ export default function App() {
     }
 
     const nextConfig = withUpdatedModel(state.running, target);
-    await runtime.applyConfig(baseUrl, nextConfig);
+    await runtime.applyConfig(baseUrl, { config: nextConfig });
     pushLog(`[command.models] switched model ${currentModel} -> ${target}`);
   }
 
@@ -444,7 +476,7 @@ export default function App() {
         }
       } catch (error) {
         if (!cancelled) {
-          setRuntimeError({ code: "UNKNOWN", message: String(error) });
+          setRuntimeError(asRuntimeError(error));
           setHealth("unreachable");
         }
       }
@@ -501,9 +533,63 @@ export default function App() {
           />
         )}
 
-        {(layout.isDesktop || mobilePane === "chat" || mobilePane === "events") && (
-          <main className="chat-main">
-            {(layout.isDesktop || mobilePane === "chat") && (
+        {(layout.isDesktop || mobilePane === "chat" || mobilePane === "events" || mobilePane === "config" || mobilePane === "skills") && (
+          <main className={`chat-main ${layout.mode}`}>
+            {layout.isDesktop ? (
+              <>
+                <ConversationPanel
+                  session={activeSession}
+                  draft={draft}
+                  sending={sending}
+                  commandHints={commandHints}
+                  onDraftChange={setDraft}
+                  onSubmit={(evt) => void handleSend(evt)}
+                  onSelectCommandHint={handleSelectCommandHint}
+                  onDeleteSession={() => void handleDeleteSession()}
+                />
+
+                <aside className="side-pane">
+                  <nav className="pane-tabs" aria-label="Desktop side panes">
+                    <button
+                      type="button"
+                      className={desktopSidePane === "events" ? "active" : ""}
+                      onClick={() => setDesktopSidePane("events")}
+                    >
+                      Events
+                    </button>
+                    <button
+                      type="button"
+                      className={desktopSidePane === "config" ? "active" : ""}
+                      onClick={() => setDesktopSidePane("config")}
+                    >
+                      Config
+                    </button>
+                    <button
+                      type="button"
+                      className={desktopSidePane === "skills" ? "active" : ""}
+                      onClick={() => setDesktopSidePane("skills")}
+                    >
+                      Skills
+                    </button>
+                  </nav>
+
+                  {desktopSidePane === "events" ? (
+                    <EventTimeline streamLogs={streamLogs} runtimeError={runtimeError} />
+                  ) : desktopSidePane === "config" ? (
+                    <ConfigPanel
+                      runtime={runtime}
+                      baseUrl={baseUrl}
+                      onLog={pushLog}
+                      onRuntimeError={setRuntimeError}
+                    />
+                  ) : (
+                    <SkillsPanel runtime={runtime} baseUrl={baseUrl} />
+                  )}
+                </aside>
+              </>
+            ) : null}
+
+            {layout.isMobile && mobilePane === "chat" ? (
               <ConversationPanel
                 session={activeSession}
                 draft={draft}
@@ -514,11 +600,25 @@ export default function App() {
                 onSelectCommandHint={handleSelectCommandHint}
                 onDeleteSession={() => void handleDeleteSession()}
               />
-            )}
+            ) : null}
 
-            {(layout.isDesktop || mobilePane === "events") && (
+            {layout.isMobile && mobilePane === "events" ? (
               <EventTimeline streamLogs={streamLogs} runtimeError={runtimeError} />
-            )}
+            ) : null}
+
+            {layout.isMobile && mobilePane === "config" ? (
+              <ConfigPanel
+                runtime={runtime}
+                baseUrl={baseUrl}
+                compact
+                onLog={pushLog}
+                onRuntimeError={setRuntimeError}
+              />
+            ) : null}
+
+            {layout.isMobile && mobilePane === "skills" ? (
+              <SkillsPanel runtime={runtime} baseUrl={baseUrl} />
+            ) : null}
           </main>
         )}
       </section>

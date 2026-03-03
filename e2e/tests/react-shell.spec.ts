@@ -20,6 +20,44 @@ async function sendAndAssertConversation(page: Page, message: string) {
   );
 }
 
+async function assertSkillsTabFlow(page: Page, mode: "desktop" | "mobile") {
+  if (mode === "desktop") {
+    await page.getByRole("button", { name: "Skills" }).click();
+  } else {
+    const skillsTab = page.getByRole("button", { name: "skills" });
+    await skillsTab.scrollIntoViewIfNeeded();
+    await skillsTab.click({ force: true });
+  }
+
+  await expect(page.locator(".skills-panel")).toBeVisible();
+  // The built-in skill-creator skill should always be present after startup.
+  const skillCards = page.locator(".skill-card");
+  await expect(skillCards).toHaveCount(1);
+  await expect(skillCards.first()).toContainText("skill-creator");
+}
+
+async function assertConfigTabFlow(page: Page, mode: "desktop" | "mobile") {
+  if (mode === "desktop") {
+    await page.getByRole("button", { name: "Config" }).click();
+  } else {
+    const configTab = page.getByRole("button", { name: "config" });
+    await configTab.scrollIntoViewIfNeeded();
+    await configTab.click({ force: true });
+  }
+
+  await expect(page.getByRole("heading", { name: "Runtime Config" })).toBeVisible();
+  await expect(page.getByTestId("config-raw-editor")).toContainText('"llm"');
+
+  await page.getByRole("button", { name: "Apply Config" }).click();
+  await expect(page.locator(".config-status")).toContainText("apply ok");
+
+  await page.getByRole("button", { name: "Reset Config" }).click();
+  await expect(page.locator(".config-status")).toContainText("reset ok");
+
+  await page.getByRole("button", { name: "Restart Runtime" }).click();
+  await expect(page.locator(".config-status")).toContainText("restart ok");
+}
+
 test("react shell desktop layout supports full flow", async ({ page }, testInfo) => {
   test.skip(!testInfo.project.name.includes("desktop"), "desktop project only");
 
@@ -37,6 +75,8 @@ test("react shell desktop layout supports full flow", async ({ page }, testInfo)
   await sendAndAssertConversation(page, message);
 
   await expect(page.locator(".event-panel")).toContainText(`[request] ${message}`);
+  await assertConfigTabFlow(page, "desktop");
+  await assertSkillsTabFlow(page, "desktop");
 });
 
 test("react shell mobile layout supports pane switching flow", async ({ page }, testInfo) => {
@@ -55,6 +95,9 @@ test("react shell mobile layout supports pane switching flow", async ({ page }, 
 
   await page.getByRole("button", { name: "events" }).click();
   await expect(page.locator(".event-panel")).toContainText(`[request] ${message}`);
+
+  await assertConfigTabFlow(page, "mobile");
+  await assertSkillsTabFlow(page, "mobile");
 });
 
 test("telegram webhook route supports channel session reuse", async ({ page }, testInfo) => {

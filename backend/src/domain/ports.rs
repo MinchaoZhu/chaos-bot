@@ -1,4 +1,5 @@
 use crate::domain::chat::{ChannelDelivery, ChannelHealth, OutboundChannelMessage};
+use crate::domain::skills::{SkillDetail, SkillMeta};
 use crate::domain::types::{Message, ToolCall, ToolResult, ToolSpec, Usage};
 use anyhow::Result;
 use async_trait::async_trait;
@@ -109,4 +110,14 @@ pub trait ChannelDispatcherPort: Send + Sync {
     async fn stop_all(&self) -> Result<()>;
     async fn health_summary(&self) -> Result<Vec<ChannelHealth>>;
     fn enabled_channels(&self) -> Vec<String>;
+}
+
+#[async_trait]
+pub trait SkillPort: Send + Sync {
+    /// Return metadata for all installed skills.
+    async fn list(&self) -> Result<Vec<SkillMeta>>;
+    /// Return full detail (meta + body) for a skill by id.
+    async fn get(&self, id: &str) -> Result<SkillDetail>;
+    /// Create the skills directory and seed the built-in skill-creator skill.
+    async fn ensure_layout(&self) -> Result<()>;
 }

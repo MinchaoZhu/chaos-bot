@@ -308,11 +308,125 @@ button[aria-disabled="true"] {
 .chat-main {
   display: grid;
   gap: 0.95rem;
-  grid-template-rows: minmax(380px, 1fr) minmax(180px, auto);
+}
+
+.chat-main.desktop {
+  grid-template-columns: minmax(0, 1fr) minmax(300px, 420px);
+  align-items: stretch;
+}
+
+.chat-main.mobile {
+  grid-template-columns: 1fr;
+}
+
+.side-pane {
+  display: grid;
+  gap: 0.6rem;
+  grid-template-rows: auto minmax(0, 1fr);
+}
+
+.pane-tabs {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.35rem;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 0.3rem;
+  background: rgba(255, 255, 255, 0.72);
+}
+
+.pane-tabs button {
+  background: rgba(255, 255, 255, 0.48);
+  color: var(--ink);
+  border: 1px solid transparent;
+}
+
+.pane-tabs button.active {
+  border-color: rgba(15, 122, 104, 0.42);
+  background: rgba(15, 122, 104, 0.16);
 }
 
 .panel {
   padding: 0.85rem;
+}
+
+.panel-title {
+  margin: 0 0 0.6rem;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.skills-panel {
+  overflow-y: auto;
+}
+
+.skills-hint {
+  font-size: 0.82rem;
+  color: var(--muted, #888);
+}
+
+.skills-error {
+  font-size: 0.82rem;
+  color: #c0392b;
+}
+
+.skill-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.4rem;
+}
+
+.skill-card {
+  display: grid;
+  grid-template-rows: auto auto;
+  gap: 0.18rem;
+  width: 100%;
+  text-align: left;
+  padding: 0.5rem 0.7rem;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.55);
+  border: 1px solid var(--line);
+}
+
+.skill-card.active {
+  border-color: rgba(15, 122, 104, 0.42);
+  background: rgba(15, 122, 104, 0.1);
+}
+
+.skill-name {
+  font-size: 0.88rem;
+  font-weight: 600;
+}
+
+.skill-desc {
+  font-size: 0.78rem;
+  color: var(--muted, #666);
+}
+
+.skill-detail {
+  margin-top: 0.75rem;
+  border-top: 1px solid var(--line);
+  padding-top: 0.65rem;
+}
+
+.skill-detail h4 {
+  margin: 0 0 0.4rem;
+  font-size: 0.88rem;
+  font-weight: 600;
+}
+
+.skill-body {
+  font-size: 0.75rem;
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 280px;
+  overflow-y: auto;
+  background: rgba(0, 0, 0, 0.04);
+  border-radius: 6px;
+  padding: 0.5rem;
 }
 
 .messages {
@@ -409,6 +523,60 @@ button[aria-disabled="true"] {
   background: rgba(255, 255, 255, 0.8);
 }
 
+.config-panel {
+  display: grid;
+  gap: 0.6rem;
+  align-content: start;
+}
+
+.config-meta {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.5rem;
+}
+
+.config-meta p {
+  margin: 0;
+  padding: 0.45rem 0.55rem;
+  border: 1px dashed var(--line);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.82);
+  color: var(--ink-soft);
+}
+
+.config-meta strong {
+  color: var(--ink);
+}
+
+.config-editor {
+  width: 100%;
+  min-height: 220px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 0.55rem 0.62rem;
+  background: rgba(255, 255, 255, 0.9);
+  font-family: "IBM Plex Mono", "JetBrains Mono", monospace;
+  font-size: 0.82rem;
+  line-height: 1.45;
+}
+
+.config-actions {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.45rem;
+}
+
+.config-status {
+  margin: 0;
+  padding: 0.45rem 0.55rem;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.82);
+  color: var(--ink-soft);
+  font-family: "IBM Plex Mono", "JetBrains Mono", monospace;
+  font-size: 0.81rem;
+}
+
 .runtime-error {
   margin-top: 0.55rem;
   border: 1px solid rgba(188, 75, 58, 0.4);
@@ -420,7 +588,7 @@ button[aria-disabled="true"] {
 
 .mobile-tabs {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 0.4rem;
   background: rgba(255, 255, 255, 0.72);
   border: 1px solid var(--line);
@@ -458,7 +626,7 @@ button[aria-disabled="true"] {
   }
 
   .chat-main {
-    grid-template-rows: auto;
+    grid-template-columns: 1fr;
   }
 
   .messages {
@@ -466,6 +634,19 @@ button[aria-disabled="true"] {
   }
 
   .composer {
+    grid-template-columns: 1fr;
+  }
+
+  .config-meta,
+  .config-actions {
+    grid-template-columns: 1fr;
+  }
+
+  .config-editor {
+    min-height: 200px;
+  }
+
+  .pane-tabs {
     grid-template-columns: 1fr;
   }
 

@@ -6,12 +6,15 @@ import {
   type ChannelStatusResponse,
   type ChatRequest,
   type ChatStreamEnvelope,
+  type ConfigMutationRequest,
   type ConfigMutationResponse,
   type ConfigStateResponse,
   type HealthResponse,
   type RuntimeError,
   type RuntimeErrorCode,
   type SessionState,
+  type SkillDetail,
+  type SkillMeta,
 } from "../contracts/protocol";
 import type { RuntimeAdapter } from "./adapter";
 
@@ -74,11 +77,11 @@ export function createTauriAdapter(): RuntimeAdapter {
     async getConfig(baseUrl: string): Promise<ConfigStateResponse> {
       return requestJson<ConfigStateResponse>(`${baseUrl}/api/config`);
     },
-    async applyConfig(baseUrl: string, config: AgentFileConfig): Promise<ConfigMutationResponse> {
+    async applyConfig(baseUrl: string, req: ConfigMutationRequest): Promise<ConfigMutationResponse> {
       return requestJson<ConfigMutationResponse>(`${baseUrl}/api/config/apply`, {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ config }),
+        body: JSON.stringify(req),
       });
     },
     async resetConfig(baseUrl: string): Promise<ConfigMutationResponse> {
@@ -106,6 +109,12 @@ export function createTauriAdapter(): RuntimeAdapter {
     },
     async deleteSession(baseUrl: string, sessionId: string): Promise<void> {
       await invoke("delete_session", { baseUrl, sessionId });
+    },
+    async listSkills(baseUrl: string): Promise<SkillMeta[]> {
+      return invoke<SkillMeta[]>("list_skills", { baseUrl });
+    },
+    async getSkill(baseUrl: string, skillId: string): Promise<SkillDetail> {
+      return invoke<SkillDetail>("get_skill", { baseUrl, skillId });
     },
     async chatStream(baseUrl: string, request: ChatRequest, onEvent, onError): Promise<void> {
       const streamId = randomStreamId();

@@ -3,11 +3,14 @@ import type {
   ChannelStatusResponse,
   ChatRequest,
   ChatStreamEnvelope,
+  ConfigMutationRequest,
   ConfigMutationResponse,
   ConfigStateResponse,
   HealthResponse,
   RuntimeError,
   SessionState,
+  SkillDetail,
+  SkillMeta,
 } from "../contracts/protocol";
 
 export interface RuntimeAdapter {
@@ -19,9 +22,11 @@ export interface RuntimeAdapter {
   getSession(baseUrl: string, sessionId: string): Promise<SessionState>;
   deleteSession(baseUrl: string, sessionId: string): Promise<void>;
   getConfig(baseUrl: string): Promise<ConfigStateResponse>;
-  applyConfig(baseUrl: string, config: AgentFileConfig): Promise<ConfigMutationResponse>;
+  applyConfig(baseUrl: string, req: ConfigMutationRequest): Promise<ConfigMutationResponse>;
   resetConfig(baseUrl: string): Promise<ConfigMutationResponse>;
   restartConfig(baseUrl: string, config?: AgentFileConfig): Promise<ConfigMutationResponse>;
+  listSkills(baseUrl: string): Promise<SkillMeta[]>;
+  getSkill(baseUrl: string, skillId: string): Promise<SkillDetail>;
   chatStream(
     baseUrl: string,
     request: ChatRequest,

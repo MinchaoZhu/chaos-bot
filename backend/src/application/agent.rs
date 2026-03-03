@@ -1,8 +1,10 @@
 use crate::infrastructure::config::AppConfig;
 use crate::domain::chat::ToolEvent;
 use crate::domain::ports::{
-    MemoryHit, MemoryPort, ModelPort, ModelRequest, ToolExecutionContext, ToolExecutorPort,
+    MemoryHit, MemoryPort, ModelPort, ModelRequest, SkillPort, ToolExecutionContext,
+    ToolExecutorPort,
 };
+use crate::domain::skills::SkillMeta;
 use crate::infrastructure::personality::PersonalitySource;
 use crate::domain::types::{Message, SessionState, ToolResult, Usage};
 use anyhow::Result;
@@ -40,6 +42,7 @@ pub struct AgentLoop {
     tools: Arc<dyn ToolExecutorPort>,
     personality: Arc<dyn PersonalitySource>,
     memory: Arc<dyn MemoryPort>,
+    skills: Arc<dyn SkillPort>,
     config: AgentConfig,
 }
 
@@ -63,6 +66,7 @@ impl AgentLoop {
         tools: Arc<dyn ToolExecutorPort>,
         personality: Arc<dyn PersonalitySource>,
         memory: Arc<dyn MemoryPort>,
+        skills: Arc<dyn SkillPort>,
         config: AgentConfig,
     ) -> Self {
         Self {
@@ -70,6 +74,7 @@ impl AgentLoop {
             tools,
             personality,
             memory,
+            skills,
             config,
         }
     }
@@ -100,10 +105,38 @@ impl AgentLoop {
             }
         };
 
+        // Load skill summaries for the system prompt header.
+        let skill_list = match self.skills.list().await {
+            Ok(list) => list,
+            Err(error) => {
+                tracing::warn!(error = %error, "skills list failed; continuing without skills");
+                Vec::new()
+            }
+        };
+
+        // Check for /activate <skill-id> command to inject full skill body.
+        let activated_skill_body =
+            if let Some(skill_id) = user_input.strip_prefix("/activate ") {
+                let skill_id = skill_id.trim();
+                match self.skills.get(skill_id).await {
+                    Ok(detail) => {
+                        tracing::info!(skill_id = %skill_id, "skill activated");
+                        Some(detail.body)
+                    }
+                    Err(error) => {
+                        tracing::warn!(skill_id = %skill_id, error = %error, "skill not found");
+                        None
+                    }
+                }
+            } else {
+                None
+            };
+
         tracing::debug!(
             session_id = %session.id,
             input_chars = user_input.chars().count(),
             memory_hits = memory_context.len(),
+            skill_count = skill_list.len(),
             "agent run_stream start"
         );
 
@@ -113,6 +146,8 @@ impl AgentLoop {
         let mut messages = vec![Message::system(Self::build_system_prompt(
             &system_prompt,
             &memory_context,
+            &skill_list,
+            activated_skill_body.as_deref(),
         ))];
         messages.extend(session.messages.clone());
 
@@ -255,8 +290,16 @@ impl AgentLoop {
         })
     }
 
-    pub fn build_system_prompt(personality_prompt: &str, memory_context: &[MemoryHit]) -> String {
+    /// Build the system prompt from personality, memory context, available skills,
+    /// and (optionally) an activated skill's full body.
+    pub fn build_system_prompt(
+        personality_prompt: &str,
+        memory_context: &[MemoryHit],
+        skills: &[SkillMeta],
+        activated_skill_body: Option<&str>,
+    ) -> String {
         let mut prompt = personality_prompt.trim().to_string();
+
         if !memory_context.is_empty() {
             let memory_block = memory_context
                 .iter()
@@ -267,6 +310,25 @@ impl AgentLoop {
             prompt.push_str("\n\n# Relevant Memory Context\n");
             prompt.push_str(&memory_block);
         }
+
+        if !skills.is_empty() {
+            prompt.push_str("\n\n# Available Skills\n");
+            for skill in skills {
+                prompt.push_str(&format!(
+                    "- **{}** (`{}`): {}\n",
+                    skill.name, skill.id, skill.description
+                ));
+            }
+            prompt.push_str(
+                "\nTo activate a skill's full instructions, send `/activate <skill-id>`.\n",
+            );
+        }
+
+        if let Some(body) = activated_skill_body {
+            prompt.push_str("\n\n# Activated Skill Instructions\n");
+            prompt.push_str(body);
+        }
+
         prompt
     }
 

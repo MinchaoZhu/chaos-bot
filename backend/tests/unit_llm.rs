@@ -23,6 +23,7 @@ fn test_app_config(provider: &str, model: &str) -> AppConfig {
     config.personality_dir = std::path::PathBuf::from(".");
     config.memory_dir = std::path::PathBuf::from(".");
     config.memory_file = std::path::PathBuf::from(".");
+    config.skills_dir = std::path::PathBuf::from(".");
     config
 }
 
@@ -94,6 +95,22 @@ fn map_tools_single() {
     assert_eq!(mapped[0]["type"], "function");
     assert_eq!(mapped[0]["function"]["name"], "read");
     assert_eq!(mapped[0]["function"]["description"], "Read file");
+}
+
+// -------------------------------------------------------------------------
+// token_limit_field
+// -------------------------------------------------------------------------
+
+#[test]
+fn token_limit_field_for_gpt5_models() {
+    let field = OpenAiProvider::token_limit_field("gpt-5.2");
+    assert_eq!(field, "max_completion_tokens");
+}
+
+#[test]
+fn token_limit_field_for_non_gpt5_models() {
+    let field = OpenAiProvider::token_limit_field("gpt-4o-mini");
+    assert_eq!(field, "max_tokens");
 }
 
 // -------------------------------------------------------------------------
