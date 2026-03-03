@@ -143,12 +143,46 @@ make test-all
 
 ## Part 3: 使用说明（怎么用、有哪些功能）
 
-### 3.1 快速开始
+### 3.1 快速开始（Web 模式）
 
-1. 启动后端：`make run`
-2. 启动前端：`VITE_BACKEND_PROXY_TARGET=http://127.0.0.1:3000 make frontend-dev`
-3. 浏览器打开：`http://127.0.0.1:1420`
-4. `Backend URL` 建议填写：`http://127.0.0.1:1420`（通过 dev proxy 访问）
+**第一步：配置 API Key**
+
+API Key 通过环境变量注入，不写入配置文件：
+
+```bash
+export OPENAI_API_KEY=sk-...       # OpenAI
+# 或
+export ANTHROPIC_API_KEY=sk-ant-... # Anthropic / Claude
+```
+
+**第二步：确认模型配置**
+
+启动时自动物化 `~/.chaos-bot/config.json`，可按需修改：
+
+```json
+{
+  "llm": {
+    "provider": "openai",
+    "model": "gpt-5.2"
+  }
+}
+```
+
+支持的 provider：`openai` / `anthropic` / `gemini`。
+
+**第三步：启动服务**
+
+```bash
+# 终端 1 — 后端（API 默认 :3000）
+make run
+
+# 终端 2 — 前端 dev server（UI 默认 :1420，/api/* 代理到后端）
+VITE_BACKEND_PROXY_TARGET=http://127.0.0.1:3000 make frontend-dev
+```
+
+**第四步：打开浏览器**
+
+访问 `http://localhost:1420`，应用自动将 API 请求代理到后端，无需手动填写 URL。
 
 ### 3.2 主要功能面板
 
@@ -175,6 +209,10 @@ make test-all
 - `POST /api/config/apply`
 - `POST /api/config/reset`
 - `POST /api/config/restart`
+- `GET /api/channels/status`
+- `POST /api/channels/telegram/webhook`
+- `GET /api/skills`
+- `GET /api/skills/:id`
 
 ### 3.4 日志与排障
 

@@ -88,6 +88,14 @@
 - `AGENTS.md`: Shared runtime status, task index, and verification summary.
 - `CLAUDE.md`: Symlink to `AGENTS.md`.
 
+## Dev Startup (Web Mode)
+- API Key: `export OPENAI_API_KEY=sk-...` (env var, not in config file)
+- Model config: `~/.chaos-bot/config.json` → `llm.provider` / `llm.model`
+- Terminal 1 (backend): `make run`
+- Terminal 2 (frontend): `VITE_BACKEND_PROXY_TARGET=http://127.0.0.1:3000 make frontend-dev`
+- Browser: `http://localhost:1420` (Vite proxies `/api/*` to `:3000` automatically)
+- See `README.md §3.1` for full detail.
+
 ## Next Actions
 1. Complete frontend connector configuration editing surface (not only status display) via existing config APIs.
 2. Add graceful shutdown hooks to invoke connector `stop_all` on process termination.
