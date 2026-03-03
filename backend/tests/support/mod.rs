@@ -372,6 +372,12 @@ impl AgentFactory for RuntimeTestAgentFactory {
 }
 
 pub async fn build_test_state_with_config_runtime() -> (TempDir, AppState, PathBuf) {
+    build_test_state_with_config_runtime_with_env(EnvSecrets::default()).await
+}
+
+pub async fn build_test_state_with_config_runtime_with_env(
+    env_secrets: EnvSecrets,
+) -> (TempDir, AppState, PathBuf) {
     let temp = tempfile::tempdir().expect("tempdir");
     let workspace_base = temp.path().join("home");
     std::fs::create_dir_all(&workspace_base).expect("create home");
@@ -399,11 +405,8 @@ pub async fn build_test_state_with_config_runtime() -> (TempDir, AppState, PathB
         secrets: AgentSecretsConfig::default(),
     };
 
-    let mut app_config = AppConfig::from_inputs(
-        config_file.clone(),
-        EnvSecrets::default(),
-        workspace_base.clone(),
-    );
+    let mut app_config =
+        AppConfig::from_inputs(config_file.clone(), env_secrets.clone(), workspace_base.clone());
     let config_path = workspace_base.join(".chaos-bot/config.json");
     app_config.config_path = config_path.clone();
     write_config_file(&config_path, &config_file).expect("write config");
@@ -421,6 +424,7 @@ pub async fn build_test_state_with_config_runtime() -> (TempDir, AppState, PathB
         config_file,
         app_config,
         workspace_base,
+        env_secrets,
         config_path.clone(),
         RestartMode::Disabled,
     ));

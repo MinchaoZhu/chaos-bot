@@ -25,6 +25,7 @@ pub struct ConfigRuntime {
     agent_factory: Arc<dyn AgentFactory>,
     state: Arc<RwLock<RuntimeSnapshot>>,
     workspace_base: PathBuf,
+    env_secrets: EnvSecrets,
     config_path: PathBuf,
     restart_mode: RestartMode,
 }
@@ -42,6 +43,7 @@ impl ConfigRuntime {
         running_file: AgentFileConfig,
         running_app: AppConfig,
         workspace_base: PathBuf,
+        env_secrets: EnvSecrets,
         config_path: PathBuf,
         restart_mode: RestartMode,
     ) -> Self {
@@ -53,6 +55,7 @@ impl ConfigRuntime {
                 running_app,
             })),
             workspace_base,
+            env_secrets,
             config_path,
             restart_mode,
         }
@@ -97,7 +100,7 @@ impl ConfigRuntime {
     pub async fn apply_structured(&self, next: AgentFileConfig) -> Result<AgentFileConfig> {
         let mut next_app = AppConfig::from_inputs(
             next.clone(),
-            EnvSecrets::default(),
+            self.env_secrets.clone(),
             self.workspace_base.clone(),
         );
         next_app.config_path = self.config_path.clone();

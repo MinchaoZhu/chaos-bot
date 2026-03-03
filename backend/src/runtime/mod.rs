@@ -13,7 +13,7 @@ use crate::interface::api::AppState;
 use crate::infrastructure::channels::build_dispatcher;
 use crate::infrastructure::channels::telegram::poll_updates_once;
 use crate::runtime::bootstrap::bootstrap_runtime_dirs;
-use crate::infrastructure::config::{workspace_base_for, AgentFileConfig, AppConfig};
+use crate::infrastructure::config::{workspace_base_for, AgentFileConfig, AppConfig, EnvSecrets};
 use crate::runtime::config_runtime::{AgentFactory, ConfigRuntime, RestartMode};
 use crate::infrastructure::model;
 use crate::infrastructure::memory::MemoryStore;
@@ -58,6 +58,7 @@ pub async fn build_app_with_config_runtime(
 
     let cwd = std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from("."));
     let workspace_base = workspace_base_for(&cwd);
+    let env_secrets = EnvSecrets::from_env();
 
     let runtime = Arc::new(ConfigRuntime::new(
         agent_slot.clone(),
@@ -65,6 +66,7 @@ pub async fn build_app_with_config_runtime(
         file_config,
         config.clone(),
         workspace_base,
+        env_secrets,
         config.config_path.clone(),
         restart_mode,
     ));

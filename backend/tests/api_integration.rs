@@ -7,6 +7,7 @@ use axum::{Json, Router};
 use chaos_bot_backend::interface::api::router;
 use chaos_bot_backend::infrastructure::channels::telegram::TelegramConnector;
 use chaos_bot_backend::infrastructure::channels::ChannelDispatcherRegistry;
+use chaos_bot_backend::infrastructure::config::EnvSecrets;
 use chaos_bot_backend::infrastructure::model::LlmStreamEvent;
 use chaos_bot_backend::domain::types::{SessionState, ToolCall};
 use serde_json::{json, Value};
@@ -473,6 +474,57 @@ async fn config_api_apply_reset_restart_lifecycle() {
     let body = to_bytes(restart_res.into_body(), usize::MAX).await.unwrap();
     let restart_json: Value = serde_json::from_slice(&body).unwrap();
     assert_eq!(restart_json["restart_scheduled"], false);
+}
+
+#[tokio::test]
+async fn config_apply_preserves_env_secrets_when_payload_omits_them() {
+    let (_temp, state, _config_path) = build_test_state_with_config_runtime_with_env(EnvSecrets {
+        openai_api_key: Some("env-openai-key".to_string()),
+        anthropic_api_key: None,
+        gemini_api_key: None,
+        telegram_bot_token: None,
+    })
+    .await;
+    let runtime = state
+        .config_runtime
+        .clone()
+        .expect("config runtime should be available");
+    let app = router(state);
+
+    let get_res = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("GET")
+                .uri("/api/config")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(get_res.status(), StatusCode::OK);
+    let body = to_bytes(get_res.into_body(), usize::MAX).await.unwrap();
+    let mut state_json: Value = serde_json::from_slice(&body).unwrap();
+    state_json["running"]["llm"]["model"] = Value::String("mock-env-next".to_string());
+    state_json["running"]["secrets"] = json!({});
+
+    let apply_res = app
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/api/config/apply")
+                .header("content-type", "application/json")
+                .body(Body::from(
+                    json!({ "config": state_json["running"].clone() }).to_string(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(apply_res.status(), StatusCode::OK);
+
+    let next_app = runtime.running_app_config().await;
+    assert_eq!(next_app.openai_api_key.as_deref(), Some("env-openai-key"));
 }
 
 fn one_turn_stream(reply: &str) -> Vec<LlmStreamEvent> {
