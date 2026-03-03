@@ -237,7 +237,7 @@ export default function App() {
     };
 
     try {
-      const response = await runtime.applyConfig(baseUrl, nextConfig);
+      const response = await runtime.applyConfig(baseUrl, { config: nextConfig });
       setConfigState(response.state);
       setTelegramDraft(telegramDraftFromConfig(response.state.running));
       setConfigNotice("config.apply ok");
@@ -357,7 +357,7 @@ export default function App() {
     }
 
     const nextConfig = withUpdatedModel(state.running, target);
-    await runtime.applyConfig(baseUrl, nextConfig);
+    await runtime.applyConfig(baseUrl, { config: nextConfig });
     pushLog(`[command.models] switched model ${currentModel} -> ${target}`);
   }
 
@@ -541,8 +541,10 @@ export default function App() {
                   session={activeSession}
                   draft={draft}
                   sending={sending}
+                  commandHints={commandHints}
                   onDraftChange={setDraft}
                   onSubmit={(evt) => void handleSend(evt)}
+                  onSelectCommandHint={handleSelectCommandHint}
                   onDeleteSession={() => void handleDeleteSession()}
                 />
 

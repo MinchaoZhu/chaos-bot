@@ -6,6 +6,7 @@ import {
   type ChannelStatusResponse,
   type ChatRequest,
   type ChatStreamEnvelope,
+  type ConfigMutationRequest,
   type ConfigMutationResponse,
   type ConfigStateResponse,
   type HealthResponse,
@@ -76,11 +77,11 @@ export function createTauriAdapter(): RuntimeAdapter {
     async getConfig(baseUrl: string): Promise<ConfigStateResponse> {
       return requestJson<ConfigStateResponse>(`${baseUrl}/api/config`);
     },
-    async applyConfig(baseUrl: string, config: AgentFileConfig): Promise<ConfigMutationResponse> {
+    async applyConfig(baseUrl: string, req: ConfigMutationRequest): Promise<ConfigMutationResponse> {
       return requestJson<ConfigMutationResponse>(`${baseUrl}/api/config/apply`, {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ config }),
+        body: JSON.stringify(req),
       });
     },
     async resetConfig(baseUrl: string): Promise<ConfigMutationResponse> {

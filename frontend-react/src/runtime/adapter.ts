@@ -22,7 +22,7 @@ export interface RuntimeAdapter {
   getSession(baseUrl: string, sessionId: string): Promise<SessionState>;
   deleteSession(baseUrl: string, sessionId: string): Promise<void>;
   getConfig(baseUrl: string): Promise<ConfigStateResponse>;
-  applyConfig(baseUrl: string, config: AgentFileConfig): Promise<ConfigMutationResponse>;
+  applyConfig(baseUrl: string, req: ConfigMutationRequest): Promise<ConfigMutationResponse>;
   resetConfig(baseUrl: string): Promise<ConfigMutationResponse>;
   restartConfig(baseUrl: string, config?: AgentFileConfig): Promise<ConfigMutationResponse>;
   listSkills(baseUrl: string): Promise<SkillMeta[]>;
