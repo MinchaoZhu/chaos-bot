@@ -34,3 +34,10 @@
 1. Decide whether the next CI/CD expansion should add more archive targets or a Tauri-native desktop installer path that can manage the backend lifecycle directly.
 2. If cross-platform installers are required, generalize the release metadata and updater discovery rules beyond the current Linux `x86_64` bundle.
 3. Preserve the `VERSION` source-of-truth approach while evolving release channels, updater policy, and asset compatibility rules.
+
+## Commit Rules
+- Only three commit subject prefixes are allowed: `Feature:`, `Fix:`, and `Refactor:`.
+- Every commit message must start with one of those exact prefixes, followed by a concise one-line summary.
+- The repository pre-push hook at `.githooks/pre-push` rejects pushes containing commits that do not match that rule.
+- New clones and worktrees must enable the versioned hook path with `git config core.hooksPath .githooks`.
+- If a commit changes compatibility, upgrade behavior, or operator workflow, the commit body must explain the impact so generated changelogs stay usable.

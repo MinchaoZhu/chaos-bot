@@ -1,0 +1,42 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+remote_name="${1:-origin}"
+
+is_zero_oid() {
+  [[ "${1:-}" =~ ^0+$ ]]
+}
+
+validate_commit_subject() {
+  local commit_sha="$1"
+  local subject
+  subject="$(git log -1 --format=%s "${commit_sha}")"
+
+  if [[ ! "${subject}" =~ ^(Feature|Fix|Refactor):\ .+ ]]; then
+    echo "pre-push: commit ${commit_sha} has invalid subject:" >&2
+    echo "  ${subject}" >&2
+    echo "required format: Feature: ..., Fix: ..., or Refactor: ..." >&2
+    return 1
+  fi
+}
+
+while read -r local_ref local_sha remote_ref remote_sha; do
+  [[ -n "${local_ref}" ]] || continue
+
+  if is_zero_oid "${local_sha}"; then
+    continue
+  fi
+
+  if is_zero_oid "${remote_sha}"; then
+    commit_range="$(git rev-list "${local_sha}" --not --remotes="${remote_name}")"
+  else
+    commit_range="$(git rev-list "${remote_sha}..${local_sha}")"
+  fi
+
+  [[ -n "${commit_range}" ]] || continue
+
+  while read -r commit_sha; do
+    [[ -n "${commit_sha}" ]] || continue
+    validate_commit_subject "${commit_sha}"
+  done <<< "${commit_range}"
+done
