@@ -61,6 +61,28 @@ function searchDraftFromConfig(config?: AgentFileConfig): SearchDraft {
   };
 }
 
+function syncSearchIntoRaw(raw: string, draft: SearchDraft): string {
+  try {
+    const parsed = JSON.parse(raw) as AgentFileConfig;
+    const nextConfig: AgentFileConfig = {
+      ...parsed,
+      search: {
+        ...(parsed.search ?? {}),
+        provider: draft.provider || undefined,
+      },
+      secrets: {
+        ...(parsed.secrets ?? {}),
+        perplexity_api_key: draft.perplexityApiKey.trim() || undefined,
+        tavily_api_key: draft.tavilyApiKey.trim() || undefined,
+        brave_search_api_key: draft.braveSearchApiKey.trim() || undefined,
+      },
+    };
+    return `${JSON.stringify(nextConfig, null, 2)}\n`;
+  } catch {
+    return raw;
+  }
+}
+
 export function ConfigPanel({
   runtime,
   baseUrl,
@@ -158,43 +180,9 @@ export function ConfigPanel({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [baseUrl, runtime]);
 
-  async function applySearchConfig() {
-    if (!state) {
-      return;
-    }
-
-    setAction("apply");
-    try {
-      const nextConfig: AgentFileConfig = {
-        ...state.running,
-        search: {
-          ...(state.running.search ?? {}),
-          provider: searchDraft.provider || undefined,
-        },
-        secrets: {
-          ...state.running.secrets,
-          perplexity_api_key: searchDraft.perplexityApiKey.trim() || undefined,
-          tavily_api_key: searchDraft.tavilyApiKey.trim() || undefined,
-          brave_search_api_key: searchDraft.braveSearchApiKey.trim() || undefined,
-        },
-      };
-      const response = await runtime.applyConfig(baseUrl, { config: nextConfig });
-      setState(response.state);
-      setRaw(response.state.raw);
-      setSearchDraft(searchDraftFromConfig(response.state.running));
-      setStatus(`search apply ok (restart_scheduled=${response.restart_scheduled})`);
-      onRuntimeError(undefined);
-      onLog(
-        `[config.apply.search] provider=${response.state.running.search.provider ?? "none"} restart_scheduled=${response.restart_scheduled}`,
-      );
-    } catch (error) {
-      const runtimeError = asRuntimeError(error);
-      onRuntimeError(runtimeError);
-      setStatus(`search apply failed: ${runtimeError.message}`);
-    } finally {
-      setAction(undefined);
-    }
-  }
+  useEffect(() => {
+    setRaw((current) => syncSearchIntoRaw(current, searchDraft));
+  }, [searchDraft]);
 
   return (
     <section className={`panel config-panel ${compact ? "compact" : ""}`}>
@@ -220,9 +208,6 @@ export function ConfigPanel({
       <section className="config-structured-section">
         <div className="panel-head">
           <h3>Search</h3>
-          <button type="button" className="ghost-btn" onClick={() => void applySearchConfig()} disabled={busy || !state}>
-            Save Search Settings
-          </button>
         </div>
 
         <label className="base-url">
