@@ -104,6 +104,7 @@ jobs:
       - name: Generate release metadata
         id: version
         run: |
+          mkdir -p .tmp/release
           bash scripts/release/validate-version-sync.sh
           bash scripts/release/generate-release-metadata.sh .tmp/release > .tmp/release/outputs.txt
           cat .tmp/release/outputs.txt >> "${GITHUB_OUTPUT}"
@@ -125,6 +126,7 @@ jobs:
       - name: Build release package
         id: package
         run: |
+          mkdir -p .tmp/release
           bash scripts/release/package-linux-x86_64.sh .tmp/release > .tmp/release/package-outputs.txt
           cat .tmp/release/package-outputs.txt >> "${GITHUB_OUTPUT}"
 
