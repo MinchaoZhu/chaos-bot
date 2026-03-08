@@ -4,7 +4,8 @@ import path from "node:path";
 
 const backendPort = Number(process.env.E2E_PORT ?? 3010);
 const backendBaseURL = process.env.E2E_BASE_URL ?? `http://127.0.0.1:${backendPort}`;
-const shellBaseURL = process.env.E2E_SHELL_BASE_URL ?? "http://127.0.0.1:1420";
+const shellPort = Number(process.env.E2E_SHELL_PORT ?? 1420);
+const shellBaseURL = process.env.E2E_SHELL_BASE_URL ?? `http://127.0.0.1:${shellPort}`;
 const currentDir = path.dirname(fileURLToPath(import.meta.url));
 const rootDir = path.resolve(currentDir, "..");
 const artifactsDir =
@@ -55,7 +56,7 @@ export default defineConfig({
       timeout: 120_000,
     },
     {
-      command: `VITE_BACKEND_PROXY_TARGET=${backendBaseURL} npm --prefix frontend-react run dev`,
+      command: `VITE_BACKEND_PROXY_TARGET=${backendBaseURL} npm --prefix frontend-react run dev -- --host 127.0.0.1 --port ${shellPort}`,
       cwd: "..",
       url: shellBaseURL,
       reuseExistingServer: !process.env.CI,
