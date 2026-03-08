@@ -101,7 +101,7 @@ pub async fn build_agent_loop(config: &AppConfig) -> Result<Arc<AgentLoop>> {
     let provider = model::build_provider(config)?;
 
     let mut registry = ToolRegistry::new();
-    registry.register_default_tools();
+    registry.register_default_tools_with_config(config);
     let tools: Arc<dyn ToolExecutorPort> = Arc::new(registry);
 
     let skills: Arc<dyn SkillPort> = Arc::new(SkillStore::new(config.skills_dir.clone()));

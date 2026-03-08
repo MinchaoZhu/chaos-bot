@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import type {
+  AgentFileConfig,
   ConfigStateResponse,
   RuntimeError,
 } from "../contracts/protocol";
@@ -11,6 +12,22 @@ type ConfigPanelProps = {
   compact?: boolean;
   onLog: (summary: string) => void;
   onRuntimeError: (error: RuntimeError | undefined) => void;
+};
+
+type SearchProvider = "" | "perplexity" | "tavily" | "brave";
+
+type SearchDraft = {
+  provider: SearchProvider;
+  perplexityApiKey: string;
+  tavilyApiKey: string;
+  braveSearchApiKey: string;
+};
+
+const EMPTY_SEARCH_DRAFT: SearchDraft = {
+  provider: "",
+  perplexityApiKey: "",
+  tavilyApiKey: "",
+  braveSearchApiKey: "",
 };
 
 function asText(value: unknown): string {
@@ -31,6 +48,19 @@ function asRuntimeError(value: unknown): RuntimeError {
   return { code: "UNKNOWN", message: asText(value) };
 }
 
+function searchDraftFromConfig(config?: AgentFileConfig): SearchDraft {
+  const provider = (config?.search?.provider ?? "").toLowerCase();
+  return {
+    provider:
+      provider === "perplexity" || provider === "tavily" || provider === "brave"
+        ? provider
+        : "",
+    perplexityApiKey: config?.secrets?.perplexity_api_key ?? "",
+    tavilyApiKey: config?.secrets?.tavily_api_key ?? "",
+    braveSearchApiKey: config?.secrets?.brave_search_api_key ?? "",
+  };
+}
+
 export function ConfigPanel({
   runtime,
   baseUrl,
@@ -40,6 +70,7 @@ export function ConfigPanel({
 }: ConfigPanelProps) {
   const [state, setState] = useState<ConfigStateResponse>();
   const [raw, setRaw] = useState("");
+  const [searchDraft, setSearchDraft] = useState<SearchDraft>(EMPTY_SEARCH_DRAFT);
   const [status, setStatus] = useState("");
   const [loading, setLoading] = useState(false);
   const [action, setAction] = useState<"apply" | "reset" | "restart" | undefined>();
@@ -52,6 +83,7 @@ export function ConfigPanel({
       const next = await runtime.getConfig(baseUrl);
       setState(next);
       setRaw(next.raw);
+      setSearchDraft(searchDraftFromConfig(next.running));
       setStatus("config loaded");
       onRuntimeError(undefined);
       onLog(`[config.get] ${next.config_path}`);
@@ -70,6 +102,7 @@ export function ConfigPanel({
       const response = await runtime.applyConfig(baseUrl, { raw });
       setState(response.state);
       setRaw(response.state.raw);
+      setSearchDraft(searchDraftFromConfig(response.state.running));
       setStatus(`apply ok (restart_scheduled=${response.restart_scheduled})`);
       onRuntimeError(undefined);
       onLog(`[config.apply] restart_scheduled=${response.restart_scheduled}`);
@@ -88,6 +121,7 @@ export function ConfigPanel({
       const response = await runtime.resetConfig(baseUrl);
       setState(response.state);
       setRaw(response.state.raw);
+      setSearchDraft(searchDraftFromConfig(response.state.running));
       setStatus(`reset ok (restart_scheduled=${response.restart_scheduled})`);
       onRuntimeError(undefined);
       onLog("[config.reset]");
@@ -105,6 +139,7 @@ export function ConfigPanel({
     try {
       const response = await runtime.restartConfig(baseUrl);
       setState(response.state);
+      setSearchDraft(searchDraftFromConfig(response.state.running));
       setStatus(`restart ok (restart_scheduled=${response.restart_scheduled})`);
       onRuntimeError(undefined);
       onLog(`[config.restart] restart_scheduled=${response.restart_scheduled}`);
@@ -122,6 +157,44 @@ export function ConfigPanel({
     // Re-load when runtime target changes.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [baseUrl, runtime]);
+
+  async function applySearchConfig() {
+    if (!state) {
+      return;
+    }
+
+    setAction("apply");
+    try {
+      const nextConfig: AgentFileConfig = {
+        ...state.running,
+        search: {
+          ...(state.running.search ?? {}),
+          provider: searchDraft.provider || undefined,
+        },
+        secrets: {
+          ...state.running.secrets,
+          perplexity_api_key: searchDraft.perplexityApiKey.trim() || undefined,
+          tavily_api_key: searchDraft.tavilyApiKey.trim() || undefined,
+          brave_search_api_key: searchDraft.braveSearchApiKey.trim() || undefined,
+        },
+      };
+      const response = await runtime.applyConfig(baseUrl, { config: nextConfig });
+      setState(response.state);
+      setRaw(response.state.raw);
+      setSearchDraft(searchDraftFromConfig(response.state.running));
+      setStatus(`search apply ok (restart_scheduled=${response.restart_scheduled})`);
+      onRuntimeError(undefined);
+      onLog(
+        `[config.apply.search] provider=${response.state.running.search.provider ?? "none"} restart_scheduled=${response.restart_scheduled}`,
+      );
+    } catch (error) {
+      const runtimeError = asRuntimeError(error);
+      onRuntimeError(runtimeError);
+      setStatus(`search apply failed: ${runtimeError.message}`);
+    } finally {
+      setAction(undefined);
+    }
+  }
 
   return (
     <section className={`panel config-panel ${compact ? "compact" : ""}`}>
@@ -143,6 +216,80 @@ export function ConfigPanel({
           model <strong>{state?.running.llm.model ?? "-"}</strong>
         </p>
       </div>
+
+      <section className="config-structured-section">
+        <div className="panel-head">
+          <h3>Search</h3>
+          <button type="button" className="ghost-btn" onClick={() => void applySearchConfig()} disabled={busy || !state}>
+            Save Search Settings
+          </button>
+        </div>
+
+        <label className="base-url">
+          <span>Provider</span>
+          <select
+            data-testid="search-provider-select"
+            value={searchDraft.provider}
+            disabled={busy}
+            onChange={(event) =>
+              setSearchDraft((prev) => ({
+                ...prev,
+                provider: event.target.value as SearchProvider,
+              }))
+            }
+          >
+            <option value="">None</option>
+            <option value="perplexity">Perplexity</option>
+            <option value="tavily">Tavily</option>
+            <option value="brave">Brave</option>
+          </select>
+        </label>
+
+        {searchDraft.provider === "perplexity" ? (
+          <label className="base-url">
+            <span>Perplexity API Key</span>
+            <input
+              data-testid="search-provider-key"
+              value={searchDraft.perplexityApiKey}
+              disabled={busy}
+              onChange={(event) =>
+                setSearchDraft((prev) => ({ ...prev, perplexityApiKey: event.target.value }))
+              }
+              placeholder="pplx-..."
+            />
+          </label>
+        ) : null}
+
+        {searchDraft.provider === "tavily" ? (
+          <label className="base-url">
+            <span>Tavily API Key</span>
+            <input
+              data-testid="search-provider-key"
+              value={searchDraft.tavilyApiKey}
+              disabled={busy}
+              onChange={(event) =>
+                setSearchDraft((prev) => ({ ...prev, tavilyApiKey: event.target.value }))
+              }
+              placeholder="tvly-..."
+            />
+          </label>
+        ) : null}
+
+        {searchDraft.provider === "brave" ? (
+          <label className="base-url">
+            <span>Brave Search API Key</span>
+            <input
+              data-testid="search-provider-key"
+              value={searchDraft.braveSearchApiKey}
+              disabled={busy}
+              onChange={(event) =>
+                setSearchDraft((prev) => ({ ...prev, braveSearchApiKey: event.target.value }))
+              }
+              placeholder="brave-search-key"
+            />
+          </label>
+        ) : null}
+      </section>
 
       <label className="base-url">
         <span>Raw JSON</span>

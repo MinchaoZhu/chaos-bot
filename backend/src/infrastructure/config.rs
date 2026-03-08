@@ -17,9 +17,13 @@ pub struct AppConfig {
     pub port: u16,
     pub provider: String,
     pub model: String,
+    pub search_provider: Option<String>,
     pub openai_api_key: Option<String>,
     pub anthropic_api_key: Option<String>,
     pub gemini_api_key: Option<String>,
+    pub perplexity_api_key: Option<String>,
+    pub tavily_api_key: Option<String>,
+    pub brave_search_api_key: Option<String>,
     pub telegram_bot_token: Option<String>,
     pub temperature: f32,
     pub max_tokens: u32,
@@ -59,9 +63,13 @@ impl Default for AppConfig {
             port: 3000,
             provider: "openai".to_string(),
             model: "gpt-4o-mini".to_string(),
+            search_provider: None,
             openai_api_key: None,
             anthropic_api_key: None,
             gemini_api_key: None,
+            perplexity_api_key: None,
+            tavily_api_key: None,
+            brave_search_api_key: None,
             telegram_bot_token: None,
             temperature: 0.2,
             max_tokens: 1024,
@@ -149,6 +157,14 @@ impl AppConfig {
         if let Some(model) = file_config.llm.model {
             config.model = model;
         }
+        if let Some(provider) = file_config.search.provider {
+            let normalized = provider.trim().to_ascii_lowercase();
+            config.search_provider = if normalized.is_empty() {
+                None
+            } else {
+                Some(normalized)
+            };
+        }
         if let Some(temperature) = file_config.llm.temperature {
             config.temperature = temperature;
         }
@@ -202,6 +218,15 @@ impl AppConfig {
         if let Some(gemini_api_key) = file_config.secrets.gemini_api_key {
             config.gemini_api_key = Some(gemini_api_key);
         }
+        if let Some(perplexity_api_key) = file_config.secrets.perplexity_api_key {
+            config.perplexity_api_key = Some(perplexity_api_key);
+        }
+        if let Some(tavily_api_key) = file_config.secrets.tavily_api_key {
+            config.tavily_api_key = Some(tavily_api_key);
+        }
+        if let Some(brave_search_api_key) = file_config.secrets.brave_search_api_key {
+            config.brave_search_api_key = Some(brave_search_api_key);
+        }
         if let Some(telegram_bot_token) = file_config.secrets.telegram_bot_token {
             config.telegram_bot_token = Some(telegram_bot_token);
         }
@@ -216,9 +241,13 @@ impl AppConfig {
             port: 3000,
             provider: "openai".to_string(),
             model: "gpt-4o-mini".to_string(),
+            search_provider: None,
             openai_api_key: None,
             anthropic_api_key: None,
             gemini_api_key: None,
+            perplexity_api_key: None,
+            tavily_api_key: None,
+            brave_search_api_key: None,
             telegram_bot_token: None,
             temperature: 0.2,
             max_tokens: 1024,
@@ -278,6 +307,7 @@ pub struct AgentFileConfig {
     pub logging: AgentLoggingConfig,
     pub server: AgentServerConfig,
     pub llm: AgentLlmConfig,
+    pub search: AgentSearchConfig,
     pub channels: AgentChannelsConfig,
     pub secrets: AgentSecretsConfig,
 }
@@ -310,6 +340,12 @@ pub struct AgentLoggingConfig {
 
 #[derive(Clone, Debug, Deserialize, Serialize, Default)]
 #[serde(default)]
+pub struct AgentSearchConfig {
+    pub provider: Option<String>,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize, Default)]
+#[serde(default)]
 pub struct AgentChannelsConfig {
     pub telegram: AgentTelegramConfig,
 }
@@ -330,6 +366,9 @@ pub struct AgentSecretsConfig {
     pub openai_api_key: Option<String>,
     pub anthropic_api_key: Option<String>,
     pub gemini_api_key: Option<String>,
+    pub perplexity_api_key: Option<String>,
+    pub tavily_api_key: Option<String>,
+    pub brave_search_api_key: Option<String>,
     pub telegram_bot_token: Option<String>,
 }
 

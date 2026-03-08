@@ -41,8 +41,10 @@ fn registry_register_default_tools_count() {
     // coding: read, write, edit, bash
     // read-only: read, grep, find, ls
     // memory: memory_get, memory_search
-    // unique: read, write, edit, bash, grep, find, ls, memory_get, memory_search = 9
-    assert_eq!(reg.specs().len(), 9);
+    // search: web_search
+    // unique: read, write, edit, bash, grep, find, ls, memory_get, memory_search, web_search = 10
+    assert_eq!(reg.specs().len(), 10);
+    assert!(reg.specs().iter().any(|spec| spec.name == "web_search"));
 }
 
 #[tokio::test]

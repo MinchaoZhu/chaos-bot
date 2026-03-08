@@ -47,6 +47,7 @@ async function assertConfigTabFlow(page: Page, mode: "desktop" | "mobile") {
 
   await expect(page.getByRole("heading", { name: "Runtime Config" })).toBeVisible();
   await expect(page.getByTestId("config-raw-editor")).toContainText('"llm"');
+  await expect(page.getByTestId("search-provider-select")).toBeVisible();
 
   await page.getByRole("button", { name: "Apply Config" }).click();
   await expect(page.locator(".config-status")).toContainText("apply ok");
@@ -220,6 +221,38 @@ test("telegram connector config panel applies runtime config", async ({ page }, 
     expect(applied.running.channels.telegram.api_base_url).toBe("mock://telegram");
     expect(applied.running.channels.telegram.webhook_secret).toBe("e2e-telegram-secret");
     expect(applied.running.secrets.telegram_bot_token).toBe("e2e-telegram-bot-token");
+  } finally {
+    const restoreResponse = await page.request.post(`${runtimeUrl}/api/config/apply`, {
+      headers: { "content-type": "application/json" },
+      data: { config: baselineConfig },
+    });
+    expect(restoreResponse.ok()).toBeTruthy();
+  }
+});
+
+test("search config panel applies runtime config", async ({ page }, testInfo) => {
+  test.skip(!testInfo.project.name.includes("desktop"), "desktop project only");
+
+  await page.goto("/");
+  await configureBackend(page);
+  await page.getByRole("button", { name: "Config" }).click();
+
+  const stateResponse = await page.request.get(`${runtimeUrl}/api/config`);
+  expect(stateResponse.ok()).toBeTruthy();
+  const state = await stateResponse.json();
+  const baselineConfig = JSON.parse(JSON.stringify(state.running));
+
+  try {
+    await page.getByTestId("search-provider-select").selectOption("brave");
+    await page.getByTestId("search-provider-key").fill("e2e-brave-key");
+    await page.getByRole("button", { name: "Save Search Settings" }).click();
+    await expect(page.locator(".config-status")).toContainText("search apply ok");
+
+    const appliedResponse = await page.request.get(`${runtimeUrl}/api/config`);
+    expect(appliedResponse.ok()).toBeTruthy();
+    const applied = await appliedResponse.json();
+    expect(applied.running.search.provider).toBe("brave");
+    expect(applied.running.secrets.brave_search_api_key).toBe("e2e-brave-key");
   } finally {
     const restoreResponse = await page.request.post(`${runtimeUrl}/api/config/apply`, {
       headers: { "content-type": "application/json" },

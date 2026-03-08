@@ -68,6 +68,10 @@ export interface AgentLlmConfig {
   token_budget?: number;
 }
 
+export interface AgentSearchConfig {
+  provider?: string;
+}
+
 export interface AgentLoggingConfig {
   level?: string;
   retention_days?: number;
@@ -90,6 +94,9 @@ export interface AgentSecretsConfig {
   openai_api_key?: string;
   anthropic_api_key?: string;
   gemini_api_key?: string;
+  perplexity_api_key?: string;
+  tavily_api_key?: string;
+  brave_search_api_key?: string;
   telegram_bot_token?: string;
 }
 
@@ -98,6 +105,7 @@ export interface AgentFileConfig {
   logging: AgentLoggingConfig;
   server: AgentServerConfig;
   llm: AgentLlmConfig;
+  search: AgentSearchConfig;
   channels: AgentChannelsConfig;
   secrets: AgentSecretsConfig;
 }

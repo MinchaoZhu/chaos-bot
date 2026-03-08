@@ -7,7 +7,8 @@ use chaos_bot_backend::application::agent::{AgentConfig, AgentLoop};
 use chaos_bot_backend::interface::api::AppState;
 use chaos_bot_backend::infrastructure::config::{
     write_config_file, AgentChannelsConfig, AgentFileConfig, AgentLlmConfig,
-    AgentLoggingConfig, AgentSecretsConfig, AgentServerConfig, AppConfig, EnvSecrets,
+    AgentLoggingConfig, AgentSearchConfig, AgentSecretsConfig, AgentServerConfig, AppConfig,
+    EnvSecrets,
 };
 use chaos_bot_backend::runtime::config_runtime::{AgentFactory, ConfigRuntime, RestartMode};
 use chaos_bot_backend::infrastructure::model::{LlmProvider, LlmRequest, LlmResponse, LlmStream, LlmStreamEvent};
@@ -401,6 +402,7 @@ pub async fn build_test_state_with_config_runtime_with_env(
             max_iterations: Some(6),
             token_budget: Some(12000),
         },
+        search: AgentSearchConfig::default(),
         channels: AgentChannelsConfig::default(),
         secrets: AgentSecretsConfig::default(),
     };
