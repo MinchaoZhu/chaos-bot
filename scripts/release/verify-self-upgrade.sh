@@ -43,7 +43,7 @@ next_release_version="$(printf '%s' "${release_version}" | sed 's/\.[0-9][0-9]*$
 if [[ "${next_release_version}" = "${release_version}" ]]; then
   next_release_version="${release_version}.99999"
 fi
-next_artifact_stem="chaos-bot-${next_release_version}"
+next_artifact_stem="${next_release_version}"
 next_bundle_root="${next_artifact_stem}-linux-x86_64"
 
 UNPACK_DIR="${TMP_DIR}/unpacked"

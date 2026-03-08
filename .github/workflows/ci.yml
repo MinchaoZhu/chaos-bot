@@ -18,6 +18,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
@@ -39,6 +41,10 @@ jobs:
       - name: Install Playwright browsers
         working-directory: e2e
         run: npx playwright install --with-deps
+
+      - name: Require version bump for pushes
+        if: ${{ github.event_name == 'push' }}
+        run: bash scripts/release/validate-version-sync.sh --require-change "${{ github.event.before }}"
 
       - name: Validate release version sync
         run: make release-check
@@ -134,7 +140,7 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ steps.version.outputs.tag_name }}
-          name: chaos-bot ${{ steps.version.outputs.release_version }}
+          name: ${{ steps.version.outputs.release_version }}
           body_path: ${{ steps.version.outputs.notes_path }}
           files: |
             ${{ steps.version.outputs.metadata_path }}

@@ -20,7 +20,7 @@ commit_count="$(git -C "${ROOT_DIR}" rev-list --count HEAD)"
 channel="${RELEASE_CHANNEL:-master}"
 release_version="${base_version}-${channel}.${commit_count}"
 tag_name="v${release_version}"
-artifact_stem="chaos-bot-${release_version}"
+artifact_stem="${release_version}"
 
 for kv in \
   "base_version=${base_version}" \

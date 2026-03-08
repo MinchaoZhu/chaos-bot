@@ -19,6 +19,7 @@
 - Respect the frozen backend architecture: `application/`, `domain/`, `infrastructure/`, `interface/`, `runtime/`, and `lib.rs` only.
 - Preserve `README.md` as the single maintained architecture/runtime/testing document entry.
 - CI full gate must remain `make test-all`, with failure artifacts aligned to `.github/workflows/ci.yml`.
+- Every pushed branch tip must carry a newly updated `VERSION`; CI should fail the push if `VERSION` did not change from the pre-push ref.
 - Every new feature must include a dedicated e2e testing phase before task completion.
 - Packaging must account for the existing Rust backend, React frontend, and Tauri shell layout in this mono-repo.
 - Versioning and publish automation should be compatible with GitHub Actions and the repository's `master` release branch policy.
