@@ -1,15 +1,16 @@
-use crate::infrastructure::config::AppConfig;
 use crate::domain::chat::ToolEvent;
 use crate::domain::ports::{
     MemoryHit, MemoryPort, ModelPort, ModelRequest, SkillPort, ToolExecutionContext,
     ToolExecutorPort,
 };
 use crate::domain::skills::SkillMeta;
-use crate::infrastructure::personality::PersonalitySource;
 use crate::domain::types::{Message, SessionState, ToolResult, Usage};
+use crate::infrastructure::config::AppConfig;
+use crate::infrastructure::personality::PersonalitySource;
 use anyhow::Result;
 use futures::StreamExt;
 use serde::Serialize;
+use serde_json;
 use std::path::PathBuf;
 use std::sync::Arc;
 
@@ -115,22 +116,21 @@ impl AgentLoop {
         };
 
         // Check for /activate <skill-id> command to inject full skill body.
-        let activated_skill_body =
-            if let Some(skill_id) = user_input.strip_prefix("/activate ") {
-                let skill_id = skill_id.trim();
-                match self.skills.get(skill_id).await {
-                    Ok(detail) => {
-                        tracing::info!(skill_id = %skill_id, "skill activated");
-                        Some(detail.body)
-                    }
-                    Err(error) => {
-                        tracing::warn!(skill_id = %skill_id, error = %error, "skill not found");
-                        None
-                    }
+        let activated_skill_body = if let Some(skill_id) = user_input.strip_prefix("/activate ") {
+            let skill_id = skill_id.trim();
+            match self.skills.get(skill_id).await {
+                Ok(detail) => {
+                    tracing::info!(skill_id = %skill_id, "skill activated");
+                    Some(detail.body)
                 }
-            } else {
-                None
-            };
+                Err(error) => {
+                    tracing::warn!(skill_id = %skill_id, error = %error, "skill not found");
+                    None
+                }
+            }
+        } else {
+            None
+        };
 
         tracing::debug!(
             session_id = %session.id,
@@ -163,13 +163,15 @@ impl AgentLoop {
                 "agent iteration"
             );
             Self::enforce_token_budget(&mut messages, self.config.token_budget);
+            let tool_specs = self.tools.specs();
+            Self::log_assembled_chat(&session.id, iteration + 1, &messages, &tool_specs);
 
             let mut stream = self
                 .provider
                 .chat_stream(ModelRequest {
                     model: self.config.model.clone(),
                     messages: messages.clone(),
-                    tools: self.tools.specs(),
+                    tools: tool_specs,
                     temperature: self.config.temperature,
                     max_tokens: self.config.max_tokens,
                 })
@@ -347,5 +349,34 @@ impl AgentLoop {
             .iter()
             .map(|message| (message.content.len() / 4 + 8) as u32)
             .sum()
+    }
+
+    fn log_assembled_chat(
+        session_id: &str,
+        iteration: usize,
+        messages: &[Message],
+        tool_specs: &[crate::domain::types::ToolSpec],
+    ) {
+        if !tracing::enabled!(tracing::Level::DEBUG) {
+            return;
+        }
+
+        let mut tool_names = tool_specs
+            .iter()
+            .map(|spec| spec.name.clone())
+            .collect::<Vec<_>>();
+        tool_names.sort_unstable();
+        let assembled_chat = serde_json::to_string_pretty(messages)
+            .unwrap_or_else(|error| format!("failed to serialize assembled chat: {error}"));
+
+        tracing::debug!(
+            session_id,
+            iteration,
+            message_count = messages.len(),
+            tool_count = tool_names.len(),
+            tool_names = ?tool_names,
+            assembled_chat = %assembled_chat,
+            "agent final assembled chat"
+        );
     }
 }
