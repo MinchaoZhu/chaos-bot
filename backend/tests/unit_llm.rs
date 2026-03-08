@@ -458,6 +458,14 @@ fn build_provider_gemini_without_key_errors() {
     assert!(build_provider(&config).is_err());
 }
 
+#[test]
+fn build_provider_gemini_with_key() {
+    let mut config = test_app_config("gemini", "gemini-2.0-flash");
+    config.gemini_api_key = Some("gemini-test-key".to_string());
+    let provider = build_provider(&config).unwrap();
+    assert_eq!(provider.name(), "gemini");
+}
+
 // -------------------------------------------------------------------------
 // MockProvider (built-in)
 // -------------------------------------------------------------------------

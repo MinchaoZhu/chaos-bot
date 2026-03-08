@@ -18,6 +18,9 @@ use tracing::{debug, info, warn};
 pub type ByteStream =
     Pin<Box<dyn Stream<Item = std::result::Result<bytes::Bytes, reqwest::Error>> + Send>>;
 
+const OPENAI_DEFAULT_BASE_URL: &str = "https://api.openai.com/v1";
+const GEMINI_DEFAULT_BASE_URL: &str = "https://generativelanguage.googleapis.com/v1beta/openai";
+
 pub fn build_provider(config: &AppConfig) -> Result<Arc<dyn LlmProvider>> {
     match config.provider.to_lowercase().as_str() {
         "openai" => {
@@ -39,13 +42,13 @@ pub fn build_provider(config: &AppConfig) -> Result<Arc<dyn LlmProvider>> {
             Ok(Arc::new(AnthropicProvider))
         }
         "gemini" => {
-            config.gemini_api_key.as_ref().ok_or_else(|| {
+            let api_key = config.gemini_api_key.clone().ok_or_else(|| {
                 anyhow!(
                     "gemini_api_key is required (set GEMINI_API_KEY or config secrets.gemini_api_key)"
                 )
             })?;
             info!(provider = "gemini", "llm provider selected");
-            Ok(Arc::new(GeminiProvider))
+            Ok(Arc::new(OpenAiProvider::new_gemini(api_key)))
         }
         "mock" => {
             info!(provider = "mock", "llm provider selected");
@@ -182,6 +185,8 @@ pub struct OpenAiProvider {
     client: Client,
     api_key: String,
     base_url: String,
+    provider_name: &'static str,
+    provider_display: &'static str,
 }
 
 pub struct OpenAiStreamState {
@@ -207,11 +212,29 @@ impl OpenAiProvider {
     }
 
     pub fn new(api_key: String) -> Self {
+        let base_url = std::env::var("OPENAI_BASE_URL")
+            .unwrap_or_else(|_| OPENAI_DEFAULT_BASE_URL.to_string());
+        Self::new_with(api_key, base_url, "openai", "OpenAI")
+    }
+
+    pub fn new_gemini(api_key: String) -> Self {
+        let base_url = std::env::var("GEMINI_BASE_URL")
+            .unwrap_or_else(|_| GEMINI_DEFAULT_BASE_URL.to_string());
+        Self::new_with(api_key, base_url, "gemini", "Gemini")
+    }
+
+    fn new_with(
+        api_key: String,
+        base_url: String,
+        provider_name: &'static str,
+        provider_display: &'static str,
+    ) -> Self {
         Self {
             client: Client::new(),
             api_key,
-            base_url: std::env::var("OPENAI_BASE_URL")
-                .unwrap_or_else(|_| "https://api.openai.com/v1".to_string()),
+            base_url,
+            provider_name,
+            provider_display,
         }
     }
 
@@ -445,14 +468,14 @@ impl OpenAiProvider {
 #[async_trait]
 impl LlmProvider for OpenAiProvider {
     fn name(&self) -> &'static str {
-        "openai"
+        self.provider_name
     }
 
     async fn chat(&self, request: LlmRequest) -> Result<LlmResponse> {
         let [system_messages, user_messages, assistant_messages, tool_messages] =
             audit::role_counts(&request.messages);
         tracing::info!(
-            provider = "openai",
+            provider = self.provider_name,
             model = %request.model,
             messages = request.messages.len(),
             message_chars = audit::total_message_chars(&request.messages),
@@ -464,10 +487,10 @@ impl LlmProvider for OpenAiProvider {
             "llm request audit"
         );
         debug!(
-            provider = "openai",
+            provider = self.provider_name,
             messages = request.messages.len(),
             tools = request.tools.len(),
-            "openai chat request"
+            "llm chat request"
         );
         let token_limit_field = Self::token_limit_field(&request.model);
         let mut payload = json!({
@@ -492,13 +515,18 @@ impl LlmProvider for OpenAiProvider {
             .json(&payload)
             .send()
             .await
-            .context("failed to call OpenAI chat completions")?;
+            .with_context(|| {
+                format!("failed to call {} chat completions", self.provider_display)
+            })?;
 
         let status = response.status();
         if !status.is_success() {
             let text = response.text().await.unwrap_or_default();
-            warn!(provider = "openai", %status, "openai chat api error");
-            return Err(anyhow!("OpenAI API error {status}: {text}"));
+            warn!(provider = self.provider_name, %status, "llm chat api error");
+            return Err(anyhow!(
+                "{} API error {status}: {text}",
+                self.provider_display
+            ));
         }
 
         let data: Value = response.json().await?;
@@ -506,11 +534,19 @@ impl LlmProvider for OpenAiProvider {
             .get("choices")
             .and_then(|value| value.as_array())
             .and_then(|choices| choices.first())
-            .ok_or_else(|| anyhow!("OpenAI response does not contain choices"))?;
+            .ok_or_else(|| {
+                anyhow!(
+                    "{} response does not contain choices",
+                    self.provider_display
+                )
+            })?;
 
-        let message_data = choice
-            .get("message")
-            .ok_or_else(|| anyhow!("OpenAI response does not contain message"))?;
+        let message_data = choice.get("message").ok_or_else(|| {
+            anyhow!(
+                "{} response does not contain message",
+                self.provider_display
+            )
+        })?;
         let finish_reason = choice
             .get("finish_reason")
             .and_then(|value| value.as_str())
@@ -536,7 +572,7 @@ impl LlmProvider for OpenAiProvider {
         let [system_messages, user_messages, assistant_messages, tool_messages] =
             audit::role_counts(&request.messages);
         tracing::info!(
-            provider = "openai",
+            provider = self.provider_name,
             model = %request.model,
             messages = request.messages.len(),
             message_chars = audit::total_message_chars(&request.messages),
@@ -548,10 +584,10 @@ impl LlmProvider for OpenAiProvider {
             "llm request audit"
         );
         debug!(
-            provider = "openai",
+            provider = self.provider_name,
             messages = request.messages.len(),
             tools = request.tools.len(),
-            "openai stream request"
+            "llm stream request"
         );
         let token_limit_field = Self::token_limit_field(&request.model);
         let mut payload = json!({
@@ -580,13 +616,21 @@ impl LlmProvider for OpenAiProvider {
             .json(&payload)
             .send()
             .await
-            .context("failed to call OpenAI chat completions (stream)")?;
+            .with_context(|| {
+                format!(
+                    "failed to call {} chat completions (stream)",
+                    self.provider_display
+                )
+            })?;
 
         let status = response.status();
         if !status.is_success() {
             let text = response.text().await.unwrap_or_default();
-            warn!(provider = "openai", %status, "openai stream api error");
-            return Err(anyhow!("OpenAI API stream error {status}: {text}"));
+            warn!(provider = self.provider_name, %status, "llm stream api error");
+            return Err(anyhow!(
+                "{} API stream error {status}: {text}",
+                self.provider_display
+            ));
         }
 
         let state = OpenAiStreamState {
@@ -600,8 +644,12 @@ impl LlmProvider for OpenAiProvider {
             done: false,
             emitted_done: false,
         };
+        let provider_display: &'static str = match self.provider_name {
+            "gemini" => "Gemini",
+            _ => "OpenAI",
+        };
 
-        let stream = stream::unfold(state, |mut state| async move {
+        let stream = stream::unfold(state, move |mut state| async move {
             loop {
                 if let Some(event) = state.pending.pop_front() {
                     return Some((event, state));
@@ -628,7 +676,10 @@ impl LlmProvider for OpenAiProvider {
                     }
                     Some(Err(error)) => {
                         state.done = true;
-                        return Some((Err(anyhow!("OpenAI streaming read error: {error}")), state));
+                        return Some((
+                            Err(anyhow!("{provider_display} streaming read error: {error}")),
+                            state,
+                        ));
                     }
                     None => {
                         state.done = true;
@@ -651,7 +702,6 @@ impl LlmProvider for OpenAiProvider {
 }
 
 pub struct AnthropicProvider;
-pub struct GeminiProvider;
 
 #[async_trait]
 impl LlmProvider for AnthropicProvider {
@@ -665,20 +715,5 @@ impl LlmProvider for AnthropicProvider {
 
     async fn chat_stream(&self, _request: LlmRequest) -> Result<LlmStream> {
         Err(anyhow!("Anthropic streaming scaffold not implemented yet"))
-    }
-}
-
-#[async_trait]
-impl LlmProvider for GeminiProvider {
-    fn name(&self) -> &'static str {
-        "gemini"
-    }
-
-    async fn chat(&self, _request: LlmRequest) -> Result<LlmResponse> {
-        Err(anyhow!("Gemini provider scaffold not implemented yet"))
-    }
-
-    async fn chat_stream(&self, _request: LlmRequest) -> Result<LlmStream> {
-        Err(anyhow!("Gemini streaming scaffold not implemented yet"))
     }
 }
