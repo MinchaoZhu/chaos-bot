@@ -1,10 +1,12 @@
 use chaos_bot_backend::application::agent::{AgentConfig, AgentLoop};
-use chaos_bot_backend::infrastructure::model::{LlmProvider, LlmRequest, LlmResponse, LlmStream, LlmStreamEvent};
+use chaos_bot_backend::domain::types::{Role, SessionState};
 use chaos_bot_backend::infrastructure::memory::{MemoryBackend, MemoryStore};
+use chaos_bot_backend::infrastructure::model::{
+    LlmProvider, LlmRequest, LlmResponse, LlmStream, LlmStreamEvent,
+};
 use chaos_bot_backend::infrastructure::personality::{PersonalityLoader, PersonalitySource};
 use chaos_bot_backend::infrastructure::skills::EmptySkillStore;
 use chaos_bot_backend::infrastructure::tooling::ToolRegistry;
-use chaos_bot_backend::domain::types::{Role, SessionState};
 use futures::stream;
 use std::sync::{Arc, Mutex};
 use tempfile::tempdir;

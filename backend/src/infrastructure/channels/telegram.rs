@@ -1,4 +1,6 @@
-use crate::domain::chat::{ChannelDelivery, ChannelHealth, InboundChannelMessage, OutboundChannelMessage};
+use crate::domain::chat::{
+    ChannelDelivery, ChannelHealth, InboundChannelMessage, OutboundChannelMessage,
+};
 use crate::domain::ports::ChannelConnectorPort;
 use anyhow::{anyhow, Context, Result};
 use async_trait::async_trait;
@@ -69,7 +71,11 @@ impl TelegramConnector {
             }))
             .send()
             .await
-            .map_err(|error| SendFailure::Transient(format!("failed to call telegram sendMessage: {url}: {error}")))?;
+            .map_err(|error| {
+                SendFailure::Transient(format!(
+                    "failed to call telegram sendMessage: {url}: {error}"
+                ))
+            })?;
 
         let status = response.status();
         if !status.is_success() {
@@ -84,14 +90,11 @@ impl TelegramConnector {
             )));
         }
 
-        let payload: Value = response
-            .json()
-            .await
-            .map_err(|error| {
-                SendFailure::Transient(format!(
-                    "failed to decode telegram sendMessage response: {error}"
-                ))
-            })?;
+        let payload: Value = response.json().await.map_err(|error| {
+            SendFailure::Transient(format!(
+                "failed to decode telegram sendMessage response: {error}"
+            ))
+        })?;
         let message_id = payload
             .get("result")
             .and_then(|value| value.get("message_id"))

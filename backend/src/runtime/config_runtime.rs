@@ -6,7 +6,9 @@ use std::time::Duration;
 use tokio::sync::RwLock;
 
 use crate::application::agent::AgentLoop;
-use crate::infrastructure::config::{read_config_file, write_config_file, AgentFileConfig, AppConfig, EnvSecrets};
+use crate::infrastructure::config::{
+    read_config_file, write_config_file, AgentFileConfig, AppConfig, EnvSecrets,
+};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum RestartMode {
