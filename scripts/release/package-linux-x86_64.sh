@@ -43,9 +43,9 @@ bundle_manifest_path="${OUTPUT_DIR}/${bundle_root}.manifest.json"
 rm -rf "${staging_dir}" "${bundle_path}" "${bundle_checksum_path}" "${bundle_manifest_path}"
 mkdir -p "${staging_dir}/bin" "${staging_dir}/frontend"
 
-npm --prefix "${ROOT_DIR}/frontend-react" ci
-npm --prefix "${ROOT_DIR}/frontend-react" run build
-cargo build --manifest-path "${ROOT_DIR}/Cargo.toml" --release -p chaos-bot-backend
+npm --prefix "${ROOT_DIR}/frontend-react" ci >&2
+npm --prefix "${ROOT_DIR}/frontend-react" run build >&2
+cargo build --manifest-path "${ROOT_DIR}/Cargo.toml" --release -p chaos-bot-backend >&2
 
 cp "${ROOT_DIR}/target/release/chaos-bot-backend" "${staging_dir}/bin/chaos-bot-backend"
 cp -R "${ROOT_DIR}/frontend-react/dist/." "${staging_dir}/frontend/"
