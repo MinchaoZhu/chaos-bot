@@ -69,7 +69,16 @@ async function requestJson<T>(url: string, init?: RequestInit): Promise<T> {
   }
 
   if (!response.ok) {
-    throw toRuntimeError(toHttpErrorCode(response.status), `${response.status} ${response.statusText}`);
+    let message = `${response.status} ${response.statusText}`;
+    try {
+      const body = (await response.json()) as { message?: string };
+      if (typeof body.message === "string" && body.message) {
+        message = body.message;
+      }
+    } catch {
+      // Fall back to the plain HTTP status text when the server response is not JSON.
+    }
+    throw toRuntimeError(toHttpErrorCode(response.status), message);
   }
 
   return (await response.json()) as T;
@@ -84,7 +93,16 @@ async function requestWithoutBody(url: string, init?: RequestInit): Promise<void
   }
 
   if (!response.ok) {
-    throw toRuntimeError(toHttpErrorCode(response.status), `${response.status} ${response.statusText}`);
+    let message = `${response.status} ${response.statusText}`;
+    try {
+      const body = (await response.json()) as { message?: string };
+      if (typeof body.message === "string" && body.message) {
+        message = body.message;
+      }
+    } catch {
+      // Fall back to the plain HTTP status text when the server response is not JSON.
+    }
+    throw toRuntimeError(toHttpErrorCode(response.status), message);
   }
 }
 

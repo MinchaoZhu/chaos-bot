@@ -6,7 +6,26 @@ Personal AI agent assistant with Rust backend, React shell, and Tauri v2 runtime
 
 ### 1.1 从 GitHub 安装
 
-发布版本会产出一个 Linux `x86_64` 安装包，可直接从 GitHub Releases 下载：
+推荐直接使用一行命令安装最新的 Linux `x86_64` 发布版本：
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/MinchaoZhu/chaos-bot/master/scripts/install-from-github.sh | bash
+```
+
+如需自定义安装前缀：
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/MinchaoZhu/chaos-bot/master/scripts/install-from-github.sh | \
+  bash -s -- --prefix /opt/chaos-bot
+```
+
+安装脚本会自动：
+
+- 读取最新 GitHub Release
+- 下载最新 `linux-x86_64` 安装包
+- 解压并执行 bundle 内的 `install.sh`
+
+如果你想手动下载，发布版本仍然会产出一个 Linux `x86_64` 安装包，可直接从 GitHub Releases 获取：
 
 - Releases 页面：`https://github.com/MinchaoZhu/chaos-bot/releases`
 - 资产命名：`<release-version>-linux-x86_64.tar.gz`
@@ -16,23 +35,17 @@ Personal AI agent assistant with Rust backend, React shell, and Tauri v2 runtime
 
 ```bash
 curl -fL -o chaos-bot.tar.gz \
-  https://github.com/MinchaoZhu/chaos-bot/releases/download/v0.1.1-master.123/0.1.1-master.123-linux-x86_64.tar.gz
+  https://github.com/MinchaoZhu/chaos-bot/releases/download/v0.1.1/0.1.1-linux-x86_64.tar.gz
 
 mkdir -p /tmp/chaos-bot-install
 tar -xzf chaos-bot.tar.gz -C /tmp/chaos-bot-install
-/tmp/chaos-bot-install/0.1.1-master.123-linux-x86_64/install.sh
+/tmp/chaos-bot-install/0.1.1-linux-x86_64/install.sh
 ```
 
 默认会安装到：
 
 - `~/.local/share/chaos-bot/releases/<release-version>`
 - `~/.local/bin/chaos-bot`
-
-如需自定义安装前缀：
-
-```bash
-./install.sh --prefix /opt/chaos-bot
-```
 
 ### 1.2 首次启动前配置
 
@@ -83,7 +96,15 @@ export ANTHROPIC_API_KEY=sk-ant-...
 
 ### 1.4 升级方式
 
-已安装的 Linux bundle 支持检查并应用最新 GitHub Release：
+已安装的 Linux bundle 支持直接在 Web UI 中检查并安装最新 GitHub Release：
+
+1. 打开 `http://127.0.0.1:3000`
+2. 进入右侧 `Config`
+3. 在 `Web Upgrade` 卡片里点击 `Refresh Upgrade`
+4. 如果检测到新版本，点击 `Install Latest Release`
+5. 安装完成后，按提示重新启动 `~/.local/bin/chaos-bot`
+
+底层仍然使用以下 API，因此也可以用 `curl` 手动触发：
 
 ```bash
 curl -fsS http://127.0.0.1:3000/api/upgrade
@@ -96,7 +117,7 @@ curl -fsS -H 'content-type: application/json' -d '{}' http://127.0.0.1:3000/api/
 - `~/.local/bin/chaos-bot` 启动器会切换到新版本
 - 升级完成后需要重新启动 `~/.local/bin/chaos-bot`
 
-也可以手动下载新版本安装包，重复执行 `install.sh` 完成覆盖升级。
+也可以重新执行一行安装命令，或手动下载新版本安装包后重复执行 `install.sh` 完成覆盖升级。
 
 ### 1.5 日志与排障
 
@@ -210,9 +231,10 @@ make test-all
 - 本地 Linux 安装包构建命令：`make package-linux-x86_64`
 - 本地安装包验证命令：`make package-verify`
 - 本地自升级验证命令：`make upgrade-verify`
+- 本地一行安装脚本验证命令：`make install-verify`
 - GitHub Actions 在 `master` push 时执行完整门禁并发布 GitHub Release。
-- 发布标签格式为 `v<base-version>-master.<commit-count>`，例如 `v0.1.0-master.123`。
-- GitHub Release 标题使用纯版本号：`<base-version>-master.<commit-count>`。
+- 发布标签格式为 `v<base-version>`，例如 `v0.1.1`。
+- GitHub Release 标题使用纯版本号：`<base-version>`。
 - 当前发布资产包含 `release-metadata.json`、`release-metadata.sha256`、`<release-version>-linux-x86_64.tar.gz`、对应 `.sha256` 与 bundle manifest。
 
 ### 3.5 Agent 开发指南

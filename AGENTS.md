@@ -5,12 +5,13 @@
 - Main Repository: /home/debian/projects/chaos-bot
 - Branch: feat/cicd
 - Active Task: none
-- Last Updated: 2026-03-08T17:18:06+08:00
+- Last Updated: 2026-03-08T18:31:09+08:00
 
 ## Task Index
 - task-1: done
 - task-2: done
 - task-3: done
+- task-4: done
 
 ## Verification
 - Dedicated git worktree created at `/home/debian/projects/chaos-bot/.projects/cicd` on branch `feat/cicd`.
@@ -18,6 +19,7 @@
 - Task-1 implemented a `master` release pipeline with shared `VERSION` validation, release metadata generation, and GitHub Release publishing.
 - Task-2 added a Linux `x86_64` install bundle, bundled-frontend serving via `CHAOS_BOT_FRONTEND_DIST`, release manifest/checksum assets, and GitHub workflow packaging/release wiring.
 - Task-3 added Linux bundle self-upgrade discovery/install APIs, frontend upgrade controls, package metadata/launcher env support, updater unit coverage, and a staged release smoke test for relaunch-based upgrades.
+- Task-4 reorganized the README around user installation and upgrade flows, enforced push-time `VERSION` bumps plus version-named release outputs, and added a versioned pre-push hook for `Feature:` / `Fix:` / `Refactor:` commit subjects.
 - `make release-check`, `make package-verify`, `make upgrade-verify`, and `make test-all` all passed on 2026-03-08; install/upgrade verification and the full gate were rerun outside the sandbox for local binary execution and e2e port binding.
 
 ## PM File Map
@@ -27,12 +29,13 @@
 - `.pm/cicd/task-1.md`: Completed GitHub CI/CD release and versioning implementation record for `master` publishes.
 - `.pm/cicd/task-2.md`: Completed installable frontend/backend packaging implementation and verification record.
 - `.pm/cicd/task-3.md`: Completed self-upgrade implementation and verification record for installed Linux bundles.
+- `.pm/cicd/task-4.md`: Completed release UX, version gate, and commit policy tightening summary for the post-upgrade follow-up commits.
 - `AGENTS.md`: Shared runtime status source.
 - `CLAUDE.md`: Symlink to `AGENTS.md`.
 
 ## Next Actions
-1. Decide whether the next CI/CD expansion should add more archive targets or a Tauri-native desktop installer path that can manage the backend lifecycle directly.
-2. If cross-platform installers are required, generalize the release metadata and updater discovery rules beyond the current Linux `x86_64` bundle.
+1. Decide whether the commit-prefix policy should also be enforced in CI or `commit-msg` hooks, not only in the versioned `pre-push` hook.
+2. If cross-platform installers are required, generalize the release metadata, asset naming, and updater discovery rules beyond the current Linux `x86_64` bundle.
 3. Preserve the `VERSION` source-of-truth approach while evolving release channels, updater policy, and asset compatibility rules.
 
 ## Commit Rules
