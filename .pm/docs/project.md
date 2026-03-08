@@ -1,39 +1,22 @@
 # Project Context
 
-- Project: cicd
+- Project: config
 - Main Repository: /home/debian/projects/chaos-bot
-- Branch: feat/cicd
-- Base Branch: master
-- Worktree Mode: git worktree
-- Updated At: 2026-03-08T17:18:06+08:00
+- Branch: feat/config
+- Worktree Mode: enabled
+- Worktree Path: /home/debian/projects/chaos-bot/.projects/config
+- Updated At: 2026-03-08T20:13:24+08:00
 
 ## Requirements
 
-- Build a GitHub CI/CD pipeline for this repository.
-- Publish release artifacts whenever `master` is updated, with explicit versioning.
-- Produce installable binary distribution that includes frontend and backend deliverables.
-- Support self-upgrade so installed binaries can move to the latest released version safely.
+- This project is dedicated to config-related changes in the chaos-bot repository.
+- Use this worktree to plan and execute configuration updates without mixing them with unrelated feature work.
+- Keep PM runtime files current so follow-up `pm new-task`, `pm update-task`, and `pm run-task` commands can continue from local context.
+- The current completed frontend task restructured navigation, config sub-tabs, and the About/version surface for config-related UX.
 
 ## Technical Constraints
 
-- Respect the frozen backend architecture: `application/`, `domain/`, `infrastructure/`, `interface/`, `runtime/`, and `lib.rs` only.
-- Preserve `README.md` as the single maintained architecture/runtime/testing document entry.
-- CI full gate must remain `make test-all`, with failure artifacts aligned to `.github/workflows/ci.yml`.
-- Every pushed branch tip must carry a newly updated `VERSION`; CI should fail the push if `VERSION` did not change from the pre-push ref.
-- Commits intended for release notes must follow a strict conventional format (`type: summary` or `type(scope): summary`) and must not use noisy placeholders such as `wip`, `tmp`, `fixup!`, `squash!`, or generic `update`.
-- Every new feature must include a dedicated e2e testing phase before task completion.
-- Packaging must account for the existing Rust backend, React frontend, and Tauri shell layout in this mono-repo.
-- Versioning and publish automation should be compatible with GitHub Actions and the repository's `master` release branch policy.
-- Repository commit subject policy is enforced by `.githooks/pre-push`: each pushed commit must match `Feature: ...`, `Fix: ...`, or `Refactor: ...`.
-- Every new feature must bump `VERSION` before push and keep `backend/Cargo.toml`, `frontend-react/package.json`, `src-tauri/Cargo.toml`, and `src-tauri/tauri.conf.json` aligned to the same version.
-- Version bump policy uses `MAJOR.MINOR.PATCH`: small iteration => `PATCH +1` (<=10), medium feature update => `MINOR +1` with `PATCH=0` (<=10), major refactor/framework/module expansion => `MAJOR +1` with `MINOR=PATCH=0`.
-- `.githooks/pre-push` enforces commit subject format, version-file sync, and valid version progression before allowing push.
-
-## Assumptions To Validate During Execution
-
-- Release version source is the repository-owned `VERSION` manifest, with derived release tags and artifact stems generated from task-1 scripts.
-- The initial "binary installation with fe and be" delivery is a user-installable `linux-x86_64` archive containing the backend binary, bundled frontend `dist`, installer script, and release manifest/checksum assets.
-- Native Tauri desktop bundles remain a follow-on option once the desktop shell can launch or embed the packaged backend consistently.
-- The implemented self-upgrade flow now targets installed Linux release bundles, consumes GitHub Release metadata plus bundle checksums, installs into a new versioned release directory, and requires a manual relaunch rather than an in-process binary swap.
-- Cross-platform self-upgrade remains a follow-on concern if additional artifact targets or native desktop installers are introduced.
-- Release preparation includes validating that the commit range is changelog-ready, with meaningful subjects and bodies for any compatibility, upgrade, or operator-facing behavior changes.
+- Repository: git worktree based workflow rooted at `/home/debian/projects/chaos-bot`.
+- Branch target: `feat/config`.
+- Planning commands only update PM metadata and task files; implementation belongs to later `pm run-task` execution.
+- `AGENTS.md` is the shared runtime source of truth and `CLAUDE.md` must remain a symlink to it.

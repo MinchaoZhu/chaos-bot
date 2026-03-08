@@ -1,60 +1,32 @@
 # PM Runtime AGENTS
 
 ## Current Status
-- Project: bot
+- Project: config
 - Main Repository: /home/debian/projects/chaos-bot
-- Branch: feat/bot
+- Branch: feat/config
 - Active Task: none
-- Last Updated: 2026-03-08T19:21:27+08:00
+- Last Updated: 2026-03-08T20:13:24+08:00
 
 ## Task Index
 - task-1: done
 - task-2: done
-- task-3: done
-- task-4: done
-- task-5: done
-- task-6: done
-- task-7: done
-- task-8: done
-- task-9: done
-- task-10: done
-- task-11: done
-- task-12: done
-- task-13: done
-- task-14: done
-- task-15: done
 
 ## Verification
-- 当前工作区为 `/home/debian/projects/chaos-bot/.projects/bot`（branch `feat/bot`）；`master` 由主 worktree `/home/debian/projects/chaos-bot` 持有。
-- 新增 `google gemini` provider：通过 OpenAI-compatible 协议复用 chat/stream 实现，默认端点 `https://generativelanguage.googleapis.com/v1beta/openai`，支持 `GEMINI_BASE_URL` 覆盖。
-- 密钥优先级保持为 `defaults < env secrets < config.json secrets`，其中 `GEMINI_API_KEY` 先从环境变量读取，再由 `config.json` 覆盖。
-- 新增单测 `build_provider_gemini_with_key`，并完成格式化与回归：`cargo fmt`、`cargo test -p chaos-bot-backend --test unit_llm --test unit_config`（通过）。
-
-## Commit Constraints
-- 仓库启用 `core.hooksPath=.githooks`，推送前会执行 `.githooks/pre-push`。
-- 所有待推送提交标题必须符合：
-  - `Feature: <summary>`
-  - `Fix: <summary>`
-  - `Refactor: <summary>`
-- 不符合格式会被 hook 拒绝推送。
-
-## Version Constraints
-- 每次新功能提交前，必须更新 `VERSION`，并同步 `backend/Cargo.toml`、`frontend-react/package.json`、`src-tauri/Cargo.toml`、`src-tauri/tauri.conf.json` 的版本号。
-- 版本策略（`MAJOR.MINOR.PATCH`）：
-  - 小迭代：`PATCH +1`（上限 `10`）。
-  - 中型更新（新增 feature、无框架变更）：`MINOR +1` 且 `PATCH=0`（`MINOR` 上限 `10`）。
-  - 大型更新（大型重构/框架变更/大型 tab 或模块新增）：`MAJOR +1` 且 `MINOR=PATCH=0`。
-- pre-push hook 会强制校验版本同步与递增规则，违反会阻止推送。
+- Dedicated git worktree created at `/home/debian/projects/chaos-bot/.projects/config` on branch `feat/config`.
+- PM runtime bootstrap completed for the config project.
+- Config UX was restructured into top-level `Conversation` / `Sessions` / `Events` / `Config` / `Skills` / `About` panes.
+- Config editing now uses `LLM`, `Search`, `IM Connectors`, `System`, and `Raw` sub-tabs, with Telegram moved into config and upgrade details moved into About.
+- `npm --prefix frontend-react run build` and `npm --prefix frontend-react run test:unit` both passed on 2026-03-08.
 
 ## PM File Map
-- `.pm/docs/project.md`: 当前项目上下文文档（历史记录仍保留 `cicd` 轨迹）。
-- `.pm/docs/AGENTS.md`: Runtime 状态镜像。
-- `.pm/bot/`: bot 项目任务目录（task-1 到 task-15）。
-- `.pm/cicd/`: cicd 项目历史任务目录（task-1 到 task-3）。
-- `AGENTS.md`: 共享 runtime 状态源。
-- `CLAUDE.md`: 指向 `AGENTS.md` 的符号链接。
+- .pm/docs/project.md: Config project requirements, worktree details, and planning constraints.
+- .pm/docs/AGENTS.md: Mirror of the runtime status file for docs sync.
+- .pm/config/task-1.md: Completed bootstrap task for the config project worktree.
+- .pm/config/task-2.md: Completed navigation/config/about frontend restructure task.
+- AGENTS.md: Shared runtime status source.
+- CLAUDE.md: Symlink to AGENTS.md.
 
 ## Next Actions
-1. 如需生产可用的 Anthropic provider，可按与 Gemini 一致的 provider 抽象继续落地真实实现。
-2. 为 OpenAI-compatible provider 增加 HTTP mock 级集成测试，覆盖非 2xx、SSE 中断、tool call 分片拼装等边界。
-3. 若后续以 bot 作为主 PM 项目，更新 `.pm/docs/project.md` 的项目元信息以消除与 cicd 的历史偏差。
+1. Smoke-test the new pane flow in `frontend-react` against a live backend runtime.
+2. Add UI-level automated coverage for tab switching and config editing if this surface will keep growing.
+3. Keep config-related work isolated to this `feat/config` worktree.

@@ -8,14 +8,14 @@ import {
   type ParsedSlashCommand,
   type SlashCommandSpec,
 } from "./commands/slash";
+import { AboutPanel } from "./components/AboutPanel";
 import { ConfigPanel } from "./components/ConfigPanel";
 import { ConversationPanel } from "./components/ConversationPanel";
 import { EventTimeline } from "./components/EventTimeline";
-import { MobilePaneTabs, type MobilePane } from "./components/MobilePaneTabs";
+import { PrimaryTabs, type PrimaryPane } from "./components/MobilePaneTabs";
 import { SessionRail } from "./components/SessionRail";
 import { SkillsPanel } from "./components/SkillsPanel";
 import type {
-  AgentFileConfig,
   ChannelStatusResponse,
   ChatStreamEnvelope,
   ConfigStateResponse,
@@ -29,26 +29,6 @@ type StreamLog = {
   id: string;
   summary: string;
 };
-
-type TelegramConnectorDraft = {
-  enabled: boolean;
-  polling: boolean;
-  apiBaseUrl: string;
-  webhookSecret: string;
-  webhookBaseUrl: string;
-  botToken: string;
-};
-
-const EMPTY_TELEGRAM_DRAFT: TelegramConnectorDraft = {
-  enabled: false,
-  polling: false,
-  apiBaseUrl: "",
-  webhookSecret: "",
-  webhookBaseUrl: "",
-  botToken: "",
-};
-
-type DesktopSidePane = "events" | "config" | "skills";
 
 function resolveDefaultBaseUrl(): string {
   if (typeof window === "undefined") {
@@ -95,22 +75,10 @@ function toRuntimeError(error: unknown): RuntimeError {
   return { code: "UNKNOWN", message: String(error) };
 }
 
-function withUpdatedModel(config: AgentFileConfig, model: string): AgentFileConfig {
+function withUpdatedModel(config: ConfigStateResponse["running"], model: string): ConfigStateResponse["running"] {
   return {
     ...config,
     llm: { ...(config.llm ?? {}), model },
-  };
-}
-
-function telegramDraftFromConfig(config?: AgentFileConfig): TelegramConnectorDraft {
-  const telegram = config?.channels?.telegram;
-  return {
-    enabled: telegram?.enabled ?? false,
-    polling: telegram?.polling ?? false,
-    apiBaseUrl: telegram?.api_base_url ?? "",
-    webhookSecret: telegram?.webhook_secret ?? "",
-    webhookBaseUrl: telegram?.webhook_base_url ?? "",
-    botToken: config?.secrets?.telegram_bot_token ?? "",
   };
 }
 
@@ -121,18 +89,13 @@ export default function App() {
   const [baseUrl, setBaseUrl] = useState(resolveDefaultBaseUrl);
   const [health, setHealth] = useState("pending");
   const [channelStatus, setChannelStatus] = useState<ChannelStatusResponse | undefined>();
-  const [configState, setConfigState] = useState<ConfigStateResponse | undefined>();
-  const [telegramDraft, setTelegramDraft] = useState<TelegramConnectorDraft>(EMPTY_TELEGRAM_DRAFT);
-  const [configBusy, setConfigBusy] = useState(false);
-  const [configNotice, setConfigNotice] = useState<string | undefined>();
   const [sessions, setSessions] = useState<SessionState[]>([]);
   const [activeSessionId, setActiveSessionId] = useState<string | undefined>();
   const [draft, setDraft] = useState("");
   const [sending, setSending] = useState(false);
   const [streamLogs, setStreamLogs] = useState<StreamLog[]>([]);
   const [runtimeError, setRuntimeError] = useState<RuntimeError | undefined>();
-  const [mobilePane, setMobilePane] = useState<MobilePane>("chat");
-  const [desktopSidePane, setDesktopSidePane] = useState<DesktopSidePane>("events");
+  const [activePane, setActivePane] = useState<PrimaryPane>("conversation");
 
   const activeSession = sessions.find((session) => session.id === activeSessionId);
   const commandHints = useMemo(() => getSlashCommandHints(draft), [draft]);
@@ -148,12 +111,6 @@ export default function App() {
     setChannelStatus(channels);
   }
 
-  async function refreshConfig() {
-    const state = await runtime.getConfig(baseUrl);
-    setConfigState(state);
-    setTelegramDraft(telegramDraftFromConfig(state.running));
-  }
-
   async function reloadSessions() {
     const list = await runtime.listSessions(baseUrl);
     setSessions(list);
@@ -167,11 +124,9 @@ export default function App() {
 
   async function createAndSelectSession(): Promise<SessionState> {
     const session = await runtime.createSession(baseUrl);
-    setActiveSessionId(session.id);
     await reloadSessions();
-    if (layout.isMobile) {
-      setMobilePane("chat");
-    }
+    setActiveSessionId(session.id);
+    setActivePane("conversation");
     return session;
   }
 
@@ -200,101 +155,19 @@ export default function App() {
     }
   }
 
-  function updateTelegramDraft(patch: Partial<TelegramConnectorDraft>) {
-    setTelegramDraft((prev) => ({ ...prev, ...patch }));
-  }
-
-  async function handleApplyConnectorConfig() {
-    if (!configState || configBusy) {
-      return;
-    }
-
-    setConfigBusy(true);
-    setConfigNotice(undefined);
-
-    const webhookSecret = telegramDraft.webhookSecret.trim();
-    const webhookBaseUrl = telegramDraft.webhookBaseUrl.trim();
-    const apiBaseUrl = telegramDraft.apiBaseUrl.trim();
-    const botToken = telegramDraft.botToken.trim();
-
-    const nextConfig: AgentFileConfig = {
-      ...configState.running,
-      channels: {
-        ...configState.running.channels,
-        telegram: {
-          ...configState.running.channels.telegram,
-          enabled: telegramDraft.enabled,
-          polling: telegramDraft.polling,
-          webhook_secret: webhookSecret || undefined,
-          webhook_base_url: webhookBaseUrl || undefined,
-          api_base_url: apiBaseUrl || undefined,
-        },
-      },
-      secrets: {
-        ...configState.running.secrets,
-        telegram_bot_token: botToken || undefined,
-      },
-    };
-
+  async function handleSelectSession(sessionId: string) {
     try {
-      const response = await runtime.applyConfig(baseUrl, { config: nextConfig });
-      setConfigState(response.state);
-      setTelegramDraft(telegramDraftFromConfig(response.state.running));
-      setConfigNotice("config.apply ok");
-      await refreshHealth();
+      const session = await runtime.getSession(baseUrl, sessionId);
+      setSessions((prev) => {
+        const next = prev.map((item) => (item.id === session.id ? session : item));
+        return next.some((item) => item.id === session.id) ? next : [session, ...next];
+      });
+      setActiveSessionId(session.id);
+      setActivePane("conversation");
       setRuntimeError(undefined);
+      pushLog(`[session.select] ${session.id}`);
     } catch (error) {
-      const message = String(error);
-      setConfigNotice(`config.apply failed: ${message}`);
-      setRuntimeError({ code: "UNKNOWN", message });
-    } finally {
-      setConfigBusy(false);
-    }
-  }
-
-  async function handleResetConfig() {
-    if (configBusy) {
-      return;
-    }
-
-    setConfigBusy(true);
-    setConfigNotice(undefined);
-    try {
-      const response = await runtime.resetConfig(baseUrl);
-      setConfigState(response.state);
-      setTelegramDraft(telegramDraftFromConfig(response.state.running));
-      setConfigNotice("config.reset ok");
-      await refreshHealth();
-      setRuntimeError(undefined);
-    } catch (error) {
-      const message = String(error);
-      setConfigNotice(`config.reset failed: ${message}`);
-      setRuntimeError({ code: "UNKNOWN", message });
-    } finally {
-      setConfigBusy(false);
-    }
-  }
-
-  async function handleRestartRuntime() {
-    if (configBusy) {
-      return;
-    }
-
-    setConfigBusy(true);
-    setConfigNotice(undefined);
-    try {
-      const response = await runtime.restartConfig(baseUrl);
-      setConfigState(response.state);
-      setTelegramDraft(telegramDraftFromConfig(response.state.running));
-      setConfigNotice(response.restart_scheduled ? "config.restart scheduled" : "config.restart accepted");
-      await refreshHealth();
-      setRuntimeError(undefined);
-    } catch (error) {
-      const message = String(error);
-      setConfigNotice(`config.restart failed: ${message}`);
-      setRuntimeError({ code: "UNKNOWN", message });
-    } finally {
-      setConfigBusy(false);
+      setRuntimeError(toRuntimeError(error));
     }
   }
 
@@ -394,12 +267,8 @@ export default function App() {
         pushLog("[command.clear] draft cleared");
         return;
       case "sessions":
-        if (layout.isMobile) {
-          setMobilePane("sessions");
-          pushLog("[command.sessions] switched to sessions pane");
-        } else {
-          pushLog("[command.sessions] desktop already shows sessions rail");
-        }
+        setActivePane("sessions");
+        pushLog("[command.sessions] switched to sessions pane");
         return;
       case "new": {
         const session = await createAndSelectSession();
@@ -469,7 +338,6 @@ export default function App() {
     async function bootstrap() {
       try {
         await refreshHealth();
-        await refreshConfig();
         await reloadSessions();
         if (!cancelled) {
           setRuntimeError(undefined);
@@ -489,12 +357,6 @@ export default function App() {
     };
   }, [runtime, baseUrl]);
 
-  useEffect(() => {
-    if (layout.isDesktop) {
-      setMobilePane("chat");
-    }
-  }, [layout.isDesktop]);
-
   return (
     <div className="page">
       <header className="hero">
@@ -503,124 +365,61 @@ export default function App() {
         <p className="hero-note">One contract, two form factors: desktop landscape and mobile portrait.</p>
       </header>
 
-      {layout.isMobile ? <MobilePaneTabs activePane={mobilePane} onChange={setMobilePane} /> : null}
+      <PrimaryTabs activePane={activePane} onChange={setActivePane} />
 
       <section className={`workspace ${layout.mode}`}>
-        {(layout.isDesktop || mobilePane === "sessions") && (
+        {activePane === "conversation" ? (
+          <ConversationPanel
+            session={activeSession}
+            draft={draft}
+            sending={sending}
+            commandHints={commandHints}
+            onDraftChange={setDraft}
+            onSubmit={(evt) => void handleSend(evt)}
+            onSelectCommandHint={handleSelectCommandHint}
+            onDeleteSession={() => void handleDeleteSession()}
+          />
+        ) : null}
+
+        {activePane === "sessions" ? (
           <SessionRail
             sessions={sessions}
             activeSessionId={activeSessionId}
-            baseUrl={baseUrl}
-            health={health}
-            channelStatus={channelStatus}
-            transport={runtime.source}
             compact={layout.isMobile}
-            onBaseUrlChange={setBaseUrl}
-            telegramDraft={telegramDraft}
-            configBusy={configBusy}
-            configNotice={configNotice}
-            onSelectSession={setActiveSessionId}
+            onSelectSession={(sessionId) => void handleSelectSession(sessionId)}
             onCreateSession={() => void handleCreateSession()}
-            onTelegramDraftChange={updateTelegramDraft}
-            onApplyConnectorConfig={() => void handleApplyConnectorConfig()}
-            onResetConfig={() => void handleResetConfig()}
-            onRestartRuntime={() => void handleRestartRuntime()}
             onRefresh={() => {
               void refreshHealth();
-              void refreshConfig();
               void reloadSessions();
             }}
           />
-        )}
+        ) : null}
 
-        {(layout.isDesktop || mobilePane === "chat" || mobilePane === "events" || mobilePane === "config" || mobilePane === "skills") && (
-          <main className={`chat-main ${layout.mode}`}>
-            {layout.isDesktop ? (
-              <>
-                <ConversationPanel
-                  session={activeSession}
-                  draft={draft}
-                  sending={sending}
-                  commandHints={commandHints}
-                  onDraftChange={setDraft}
-                  onSubmit={(evt) => void handleSend(evt)}
-                  onSelectCommandHint={handleSelectCommandHint}
-                  onDeleteSession={() => void handleDeleteSession()}
-                />
+        {activePane === "events" ? (
+          <EventTimeline streamLogs={streamLogs} runtimeError={runtimeError} />
+        ) : null}
 
-                <aside className="side-pane">
-                  <nav className="pane-tabs" aria-label="Desktop side panes">
-                    <button
-                      type="button"
-                      className={desktopSidePane === "events" ? "active" : ""}
-                      onClick={() => setDesktopSidePane("events")}
-                    >
-                      Events
-                    </button>
-                    <button
-                      type="button"
-                      className={desktopSidePane === "config" ? "active" : ""}
-                      onClick={() => setDesktopSidePane("config")}
-                    >
-                      Config
-                    </button>
-                    <button
-                      type="button"
-                      className={desktopSidePane === "skills" ? "active" : ""}
-                      onClick={() => setDesktopSidePane("skills")}
-                    >
-                      Skills
-                    </button>
-                  </nav>
+        {activePane === "config" ? (
+          <ConfigPanel
+            runtime={runtime}
+            baseUrl={baseUrl}
+            health={health}
+            transport={runtime.source}
+            channelStatus={channelStatus}
+            compact={layout.isMobile}
+            onBaseUrlChange={setBaseUrl}
+            onLog={pushLog}
+            onRuntimeError={setRuntimeError}
+          />
+        ) : null}
 
-                  {desktopSidePane === "events" ? (
-                    <EventTimeline streamLogs={streamLogs} runtimeError={runtimeError} />
-                  ) : desktopSidePane === "config" ? (
-                    <ConfigPanel
-                      runtime={runtime}
-                      baseUrl={baseUrl}
-                      onLog={pushLog}
-                      onRuntimeError={setRuntimeError}
-                    />
-                  ) : (
-                    <SkillsPanel runtime={runtime} baseUrl={baseUrl} onLog={pushLog} />
-                  )}
-                </aside>
-              </>
-            ) : null}
+        {activePane === "skills" ? (
+          <SkillsPanel runtime={runtime} baseUrl={baseUrl} onLog={pushLog} />
+        ) : null}
 
-            {layout.isMobile && mobilePane === "chat" ? (
-              <ConversationPanel
-                session={activeSession}
-                draft={draft}
-                sending={sending}
-                commandHints={commandHints}
-                onDraftChange={setDraft}
-                onSubmit={(evt) => void handleSend(evt)}
-                onSelectCommandHint={handleSelectCommandHint}
-                onDeleteSession={() => void handleDeleteSession()}
-              />
-            ) : null}
-
-            {layout.isMobile && mobilePane === "events" ? (
-              <EventTimeline streamLogs={streamLogs} runtimeError={runtimeError} />
-            ) : null}
-
-            {layout.isMobile && mobilePane === "config" ? (
-              <ConfigPanel
-                runtime={runtime}
-                baseUrl={baseUrl}
-                compact
-                onLog={pushLog}
-                onRuntimeError={setRuntimeError}
-              />
-            ) : null}
-
-            {layout.isMobile && mobilePane === "skills" ? (
-              <SkillsPanel runtime={runtime} baseUrl={baseUrl} onLog={pushLog} />
-            ) : null}
-          </main>
-        )}
+        {activePane === "about" ? (
+          <AboutPanel runtime={runtime} baseUrl={baseUrl} transport={runtime.source} onLog={pushLog} onRuntimeError={setRuntimeError} />
+        ) : null}
       </section>
     </div>
   );

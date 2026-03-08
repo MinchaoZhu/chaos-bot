@@ -66,14 +66,13 @@ body {
 }
 
 .workspace.desktop {
-  grid-template-columns: 350px minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr);
 }
 
 .workspace.mobile {
   grid-template-columns: 1fr;
 }
 
-.rail,
 .panel {
   border: 1px solid var(--line);
   border-radius: 16px;
@@ -81,19 +80,6 @@ body {
   backdrop-filter: blur(10px);
 }
 
-.rail {
-  padding: 0.85rem;
-  display: grid;
-  gap: 0.8rem;
-  grid-template-rows: auto auto auto 1fr;
-  min-height: 520px;
-}
-
-.rail.compact {
-  min-height: 0;
-}
-
-.rail-head,
 .panel-head {
   display: flex;
   align-items: center;
@@ -153,40 +139,6 @@ button[aria-disabled="true"] {
   background: #a63f30;
 }
 
-.runtime-meta {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 0.55rem;
-}
-
-.runtime-meta p {
-  margin: 0;
-  padding: 0.5rem 0.62rem;
-  border: 1px dashed var(--line);
-  border-radius: 10px;
-  background: rgba(255, 255, 255, 0.82);
-  color: var(--ink-soft);
-}
-
-.channel-meta {
-  display: grid;
-  grid-template-columns: 1fr;
-  gap: 0.45rem;
-}
-
-.channel-meta p {
-  margin: 0;
-  padding: 0.45rem 0.62rem;
-  border: 1px dashed var(--line);
-  border-radius: 10px;
-  background: rgba(244, 252, 249, 0.92);
-  color: var(--ink-soft);
-}
-
-.runtime-meta strong {
-  color: var(--ink);
-}
-
 .base-url {
   display: grid;
   gap: 0.35rem;
@@ -198,6 +150,7 @@ button[aria-disabled="true"] {
 }
 
 .base-url input,
+.base-url select,
 .connector-config input,
 .composer input {
   width: 100%;
@@ -272,6 +225,34 @@ button[aria-disabled="true"] {
   color: var(--ink-soft);
 }
 
+.sessions-note,
+.about-copy {
+  margin: 0;
+  color: var(--ink-soft);
+}
+
+.primary-tabs {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 0.4rem;
+  background: rgba(255, 255, 255, 0.72);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 0.35rem;
+}
+
+.primary-tabs button {
+  text-transform: none;
+  background: rgba(255, 255, 255, 0.45);
+  color: var(--ink);
+  border: 1px solid transparent;
+}
+
+.primary-tabs button.active {
+  border-color: rgba(15, 122, 104, 0.42);
+  background: rgba(15, 122, 104, 0.16);
+}
+
 .session-list {
   margin: 0;
   padding: 0;
@@ -303,47 +284,6 @@ button[aria-disabled="true"] {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-}
-
-.chat-main {
-  display: grid;
-  gap: 0.95rem;
-}
-
-.chat-main.desktop {
-  grid-template-columns: minmax(0, 1fr) minmax(300px, 420px);
-  align-items: stretch;
-}
-
-.chat-main.mobile {
-  grid-template-columns: 1fr;
-}
-
-.side-pane {
-  display: grid;
-  gap: 0.6rem;
-  grid-template-rows: auto minmax(0, 1fr);
-}
-
-.pane-tabs {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 0.35rem;
-  border: 1px solid var(--line);
-  border-radius: 12px;
-  padding: 0.3rem;
-  background: rgba(255, 255, 255, 0.72);
-}
-
-.pane-tabs button {
-  background: rgba(255, 255, 255, 0.48);
-  color: var(--ink);
-  border: 1px solid transparent;
-}
-
-.pane-tabs button.active {
-  border-color: rgba(15, 122, 104, 0.42);
-  background: rgba(15, 122, 104, 0.16);
 }
 
 .panel {
@@ -550,6 +490,49 @@ button[aria-disabled="true"] {
   align-content: start;
 }
 
+.config-tabs {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 0.35rem;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 0.3rem;
+  background: rgba(255, 255, 255, 0.72);
+}
+
+.config-tabs button {
+  background: rgba(255, 255, 255, 0.48);
+  color: var(--ink);
+  border: 1px solid transparent;
+}
+
+.config-tabs button.active {
+  border-color: rgba(15, 122, 104, 0.42);
+  background: rgba(15, 122, 104, 0.16);
+}
+
+.config-section {
+  display: grid;
+  gap: 0.8rem;
+}
+
+.field-grid {
+  display: grid;
+  gap: 0.7rem;
+}
+
+.field-grid.two {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.field-grid.three {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.field-span-two {
+  grid-column: span 2;
+}
+
 .config-meta {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -604,6 +587,35 @@ button[aria-disabled="true"] {
   overflow-wrap: anywhere;
 }
 
+.about-panel {
+  display: grid;
+  gap: 0.8rem;
+}
+
+.about-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.7rem;
+}
+
+.about-card {
+  display: grid;
+  gap: 0.4rem;
+  padding: 0.8rem;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.84);
+}
+
+.about-card h3 {
+  margin: 0;
+}
+
+.about-link {
+  color: var(--accent-strong);
+  overflow-wrap: anywhere;
+}
+
 .config-editor {
   width: 100%;
   min-height: 220px;
@@ -642,47 +654,13 @@ button[aria-disabled="true"] {
   background: rgba(255, 239, 236, 0.92);
 }
 
-.mobile-tabs {
-  display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
-  gap: 0.4rem;
-  background: rgba(255, 255, 255, 0.72);
-  border: 1px solid var(--line);
-  border-radius: 12px;
-  padding: 0.35rem;
-}
-
-.mobile-tabs button {
-  text-transform: capitalize;
-  background: rgba(255, 255, 255, 0.45);
-  color: var(--ink);
-  border: 1px solid transparent;
-}
-
-.mobile-tabs button.active {
-  border-color: rgba(15, 122, 104, 0.42);
-  background: rgba(15, 122, 104, 0.16);
-}
-
 @media (max-width: 979px) {
   .page {
     margin: 0.8rem auto 1rem;
   }
 
-  .rail {
-    min-height: 0;
-  }
-
-  .runtime-meta {
-    grid-template-columns: 1fr;
-  }
-
   .session-list {
     max-height: 320px;
-  }
-
-  .chat-main {
-    grid-template-columns: 1fr;
   }
 
   .messages {
@@ -693,8 +671,13 @@ button[aria-disabled="true"] {
     grid-template-columns: 1fr;
   }
 
+  .about-grid,
+  .config-tabs,
   .config-meta,
-  .config-actions {
+  .config-actions,
+  .field-grid.two,
+  .field-grid.three,
+  .primary-tabs {
     grid-template-columns: 1fr;
   }
 
@@ -702,12 +685,12 @@ button[aria-disabled="true"] {
     min-height: 200px;
   }
 
-  .pane-tabs {
-    grid-template-columns: 1fr;
-  }
-
   .composer button,
   .panel-head button {
     width: 100%;
+  }
+
+  .field-span-two {
+    grid-column: auto;
   }
 }
