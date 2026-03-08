@@ -166,6 +166,8 @@ API Key 通过环境变量注入，不写入配置文件：
 export OPENAI_API_KEY=sk-...       # OpenAI
 # 或
 export ANTHROPIC_API_KEY=sk-ant-... # Anthropic / Claude
+# 或
+export GEMINI_API_KEY=...          # Google Gemini
 ```
 
 **第二步：确认模型配置**

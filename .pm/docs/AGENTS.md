@@ -1,36 +1,44 @@
 # PM Runtime AGENTS
 
 ## Current Status
-- Project: cicd
+- Project: bot
 - Main Repository: /home/debian/projects/chaos-bot
-- Branch: feat/cicd
+- Branch: feat/bot
 - Active Task: none
-- Last Updated: 2026-03-08T17:18:06+08:00
+- Last Updated: 2026-03-08T19:21:27+08:00
 
 ## Task Index
 - task-1: done
 - task-2: done
 - task-3: done
+- task-4: done
+- task-5: done
+- task-6: done
+- task-7: done
+- task-8: done
+- task-9: done
+- task-10: done
+- task-11: done
+- task-12: done
+- task-13: done
+- task-14: done
+- task-15: done
 
 ## Verification
-- Dedicated git worktree created at `/home/debian/projects/chaos-bot/.projects/cicd` on branch `feat/cicd`.
-- Branch gate satisfied for task execution: after fetching `origin`, `feat/cicd`, local `master`, and `origin/master` all matched the same commit.
-- Task-1 implemented a `master` release pipeline with shared `VERSION` validation, release metadata generation, and GitHub Release publishing.
-- Task-2 added a Linux `x86_64` install bundle, bundled-frontend serving via `CHAOS_BOT_FRONTEND_DIST`, release manifest/checksum assets, and GitHub workflow packaging/release wiring.
-- Task-3 added Linux bundle self-upgrade discovery/install APIs, frontend upgrade controls, package metadata/launcher env support, updater unit coverage, and a staged release smoke test for relaunch-based upgrades.
-- `make release-check`, `make package-verify`, `make upgrade-verify`, and `make test-all` all passed on 2026-03-08; install/upgrade verification and the full gate were rerun outside the sandbox for local binary execution and e2e port binding.
+- 当前工作区为 `/home/debian/projects/chaos-bot/.projects/bot`（branch `feat/bot`）；`master` 由主 worktree `/home/debian/projects/chaos-bot` 持有。
+- 新增 `google gemini` provider：通过 OpenAI-compatible 协议复用 chat/stream 实现，默认端点 `https://generativelanguage.googleapis.com/v1beta/openai`，支持 `GEMINI_BASE_URL` 覆盖。
+- 密钥优先级保持为 `defaults < env secrets < config.json secrets`，其中 `GEMINI_API_KEY` 先从环境变量读取，再由 `config.json` 覆盖。
+- 新增单测 `build_provider_gemini_with_key`，并完成格式化与回归：`cargo fmt`、`cargo test -p chaos-bot-backend --test unit_llm --test unit_config`（通过）。
 
 ## PM File Map
-- `.pm/docs/project.md`: Project context, requirements, constraints, and planning assumptions for the CI/CD initiative.
-- `.pm/docs/AGENTS.md`: Runtime status mirror for docs sync.
-- `.pm/cicd/`: Project-scoped task directory for the CI/CD workstream.
-- `.pm/cicd/task-1.md`: Completed GitHub CI/CD release and versioning implementation record for `master` publishes.
-- `.pm/cicd/task-2.md`: Completed installable frontend/backend packaging implementation and verification record.
-- `.pm/cicd/task-3.md`: Completed self-upgrade implementation and verification record for installed Linux bundles.
-- `AGENTS.md`: Shared runtime status source.
-- `CLAUDE.md`: Symlink to `AGENTS.md`.
+- `.pm/docs/project.md`: 当前项目上下文文档（历史记录仍保留 `cicd` 轨迹）。
+- `.pm/docs/AGENTS.md`: Runtime 状态镜像。
+- `.pm/bot/`: bot 项目任务目录（task-1 到 task-15）。
+- `.pm/cicd/`: cicd 项目历史任务目录（task-1 到 task-3）。
+- `AGENTS.md`: 共享 runtime 状态源。
+- `CLAUDE.md`: 指向 `AGENTS.md` 的符号链接。
 
 ## Next Actions
-1. Decide whether the next CI/CD expansion should add more archive targets or a Tauri-native desktop installer path that can manage the backend lifecycle directly.
-2. If cross-platform installers are required, generalize the release metadata and updater discovery rules beyond the current Linux `x86_64` bundle.
-3. Preserve the `VERSION` source-of-truth approach while evolving release channels, updater policy, and asset compatibility rules.
+1. 如需生产可用的 Anthropic provider，可按与 Gemini 一致的 provider 抽象继续落地真实实现。
+2. 为 OpenAI-compatible provider 增加 HTTP mock 级集成测试，覆盖非 2xx、SSE 中断、tool call 分片拼装等边界。
+3. 若后续以 bot 作为主 PM 项目，更新 `.pm/docs/project.md` 的项目元信息以消除与 cicd 的历史偏差。
