@@ -14,6 +14,7 @@ import type {
   SkillInstallResponse,
   SkillMeta,
   UpgradeApplyResponse,
+  UpgradeRestartResponse,
   UpgradeStatusResponse,
 } from "../contracts/protocol";
 
@@ -31,6 +32,7 @@ export interface RuntimeAdapter {
   restartConfig(baseUrl: string, config?: AgentFileConfig): Promise<ConfigMutationResponse>;
   getUpgradeStatus(baseUrl: string): Promise<UpgradeStatusResponse>;
   applyUpgrade(baseUrl: string): Promise<UpgradeApplyResponse>;
+  relaunchUpgrade(baseUrl: string): Promise<UpgradeRestartResponse>;
   listSkills(baseUrl: string): Promise<SkillMeta[]>;
   getSkill(baseUrl: string, skillId: string): Promise<SkillDetail>;
   installSkill(baseUrl: string, req: SkillInstallRequest): Promise<SkillInstallResponse>;

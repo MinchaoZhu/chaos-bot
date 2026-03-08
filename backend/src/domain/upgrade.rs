@@ -27,3 +27,12 @@ pub struct UpgradeApplyResult {
     pub message: String,
     pub status: UpgradeStatus,
 }
+
+#[derive(Clone, Debug, Serialize)]
+pub struct UpgradeRestartResult {
+    pub ok: bool,
+    pub action: &'static str,
+    pub launcher_path: Option<String>,
+    pub target_version: Option<String>,
+    pub message: String,
+}

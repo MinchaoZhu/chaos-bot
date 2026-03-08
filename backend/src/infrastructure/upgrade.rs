@@ -1,5 +1,5 @@
 use crate::domain::ports::UpgradePort;
-use crate::domain::upgrade::{UpgradeApplyResult, UpgradeStatus};
+use crate::domain::upgrade::{UpgradeApplyResult, UpgradeRestartResult, UpgradeStatus};
 use anyhow::{anyhow, bail, Context, Result};
 use async_trait::async_trait;
 use flate2::read::GzDecoder;
@@ -199,6 +199,44 @@ impl UpgradePort for GitHubReleaseUpdater {
                 release.metadata.release_version
             ),
             status,
+        })
+    }
+
+    async fn relaunch(&self) -> Result<UpgradeRestartResult> {
+        let context = load_install_context()?.ok_or_else(|| {
+            anyhow!("self-upgrade restart is only available for installed release bundles")
+        })?;
+
+        let launcher_path = context.launcher_path();
+        if !launcher_path.exists() {
+            bail!("launcher not found: {}", launcher_path.display());
+        }
+
+        Command::new("bash")
+            .arg("-lc")
+            .arg("sleep 1; exec \"$1\"")
+            .arg("--")
+            .arg(&launcher_path)
+            .stdin(Stdio::null())
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .spawn()
+            .context("failed to spawn launcher restart helper")?;
+
+        tokio::spawn(async {
+            tokio::time::sleep(std::time::Duration::from_millis(250)).await;
+            std::process::exit(0);
+        });
+
+        Ok(UpgradeRestartResult {
+            ok: true,
+            action: "relaunch",
+            launcher_path: Some(launcher_path.display().to_string()),
+            target_version: Some(context.current_version.clone()),
+            message: format!(
+                "restart scheduled via {}",
+                launcher_path.display()
+            ),
         })
     }
 }

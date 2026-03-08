@@ -9,6 +9,7 @@ export type RuntimeCommand =
   | "config.restart"
   | "upgrade.status"
   | "upgrade.apply"
+  | "upgrade.relaunch"
   | "session.list"
   | "session.create"
   | "session.get"
@@ -160,6 +161,14 @@ export interface UpgradeApplyResponse {
   relaunch_required: boolean;
   message: string;
   status: UpgradeStatusResponse;
+}
+
+export interface UpgradeRestartResponse {
+  ok: boolean;
+  action: string;
+  launcher_path?: string;
+  target_version?: string;
+  message: string;
 }
 
 export interface ChatRequest {

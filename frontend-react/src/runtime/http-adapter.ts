@@ -16,6 +16,7 @@ import type {
   SkillMeta,
   StreamEventType,
   UpgradeApplyResponse,
+  UpgradeRestartResponse,
   UpgradeStatusResponse,
 } from "../contracts/protocol";
 import type { RuntimeAdapter } from "./adapter";
@@ -144,6 +145,13 @@ export function createHttpAdapter(): RuntimeAdapter {
     },
     async applyUpgrade(baseUrl: string): Promise<UpgradeApplyResponse> {
       return requestJson<UpgradeApplyResponse>(`${baseUrl}/api/upgrade/apply`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: "{}",
+      });
+    },
+    async relaunchUpgrade(baseUrl: string): Promise<UpgradeRestartResponse> {
+      return requestJson<UpgradeRestartResponse>(`${baseUrl}/api/upgrade/relaunch`, {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: "{}",

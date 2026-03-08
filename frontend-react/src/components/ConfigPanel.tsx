@@ -10,6 +10,8 @@ import type {
   ChannelStatusResponse,
   ConfigStateResponse,
   RuntimeError,
+  UpgradeApplyResponse,
+  UpgradeStatusResponse,
 } from "../contracts/protocol";
 import type { RuntimeAdapter } from "../runtime/adapter";
 
@@ -124,10 +126,12 @@ export function ConfigPanel({
   onRuntimeError,
 }: ConfigPanelProps) {
   const [state, setState] = useState<ConfigStateResponse>();
+  const [upgradeStatus, setUpgradeStatus] = useState<UpgradeStatusResponse>();
+  const [lastUpgradeResult, setLastUpgradeResult] = useState<UpgradeApplyResponse>();
   const [raw, setRaw] = useState("");
   const [status, setStatus] = useState("");
   const [loading, setLoading] = useState(false);
-  const [action, setAction] = useState<"apply" | "reset" | "restart" | undefined>();
+  const [action, setAction] = useState<"apply" | "reset" | "restart" | "upgrade" | "relaunch" | undefined>();
   const [activeTab, setActiveTab] = useState<ConfigTab>("llm");
 
   const busy = loading || Boolean(action);
@@ -144,8 +148,12 @@ export function ConfigPanel({
   async function loadConfig() {
     setLoading(true);
     try {
-      const next = await runtime.getConfig(baseUrl);
+      const [next, nextUpgradeStatus] = await Promise.all([
+        runtime.getConfig(baseUrl),
+        runtime.getUpgradeStatus(baseUrl),
+      ]);
       setState(next);
+      setUpgradeStatus(nextUpgradeStatus);
       setRaw(next.raw);
       setStatus("config loaded");
       onRuntimeError(undefined);
@@ -172,6 +180,68 @@ export function ConfigPanel({
       const runtimeError = asRuntimeError(error);
       onRuntimeError(runtimeError);
       setStatus(`apply failed: ${runtimeError.message}`);
+    } finally {
+      setAction(undefined);
+    }
+  }
+
+  async function refreshUpgradeStatus() {
+    try {
+      const next = await runtime.getUpgradeStatus(baseUrl);
+      setUpgradeStatus(next);
+      setStatus(
+        next.supported
+          ? next.upgrade_available
+            ? `upgrade available: ${next.current_version ?? "unknown"} -> ${next.latest_version ?? "unknown"}`
+            : `upgrade status ok (${next.current_version ?? "unknown"})`
+          : `upgrade unavailable: ${next.reason ?? "unsupported runtime"}`,
+      );
+      onRuntimeError(undefined);
+      onLog(`[upgrade.status] available=${next.upgrade_available}`);
+    } catch (error) {
+      const runtimeError = asRuntimeError(error);
+      onRuntimeError(runtimeError);
+      setStatus(`upgrade status failed: ${runtimeError.message}`);
+    }
+  }
+
+  async function applyUpgrade() {
+    setAction("upgrade");
+    try {
+      const response = await runtime.applyUpgrade(baseUrl);
+      setLastUpgradeResult(response);
+      setUpgradeStatus(response.status);
+      setStatus(
+        response.relaunch_required
+          ? `Upgrade installed successfully. Restart ${response.launcher_path ?? "~/.local/bin/chaos-bot"} to use ${response.target_version ?? "the new release"}.`
+          : response.message,
+      );
+      onRuntimeError(undefined);
+      onLog(
+        `[upgrade.apply] action=${response.action} current=${response.current_version ?? "-"} target=${response.target_version ?? "-"}`,
+      );
+    } catch (error) {
+      const runtimeError = asRuntimeError(error);
+      onRuntimeError(runtimeError);
+      setStatus(`upgrade failed: ${runtimeError.message}`);
+    } finally {
+      setAction(undefined);
+    }
+  }
+
+  async function relaunchUpgrade() {
+    setAction("relaunch");
+    try {
+      const response = await runtime.relaunchUpgrade(baseUrl);
+      setStatus(
+        `Restart requested successfully. chaos-bot is relaunching via ${response.launcher_path ?? "~/.local/bin/chaos-bot"}.`,
+      );
+      onRuntimeError(undefined);
+      onLog(`[upgrade.relaunch] target=${response.target_version ?? "-"}`);
+    } catch (error) {
+      const runtimeError = asRuntimeError(error);
+      onRuntimeError(runtimeError);
+      setStatus(`restart failed: ${runtimeError.message}`);
     } finally {
       setAction(undefined);
     }
@@ -218,6 +288,22 @@ export function ConfigPanel({
     // Re-load when runtime target changes.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [baseUrl, runtime]);
+
+  const upgradeHeadline = !upgradeStatus
+    ? "Checking installed release..."
+    : !upgradeStatus.supported
+      ? "Web UI upgrade is unavailable in this runtime"
+      : upgradeStatus.upgrade_available
+        ? `Upgrade ready: ${upgradeStatus.current_version ?? "unknown"} -> ${upgradeStatus.latest_version ?? "unknown"}`
+        : `You are already on ${upgradeStatus.current_version ?? "the latest release"}`;
+
+  const upgradeBody = !upgradeStatus
+    ? "Load runtime config to inspect the installed release and GitHub release status."
+    : !upgradeStatus.supported
+      ? upgradeStatus.reason ?? "Self-upgrade only works when chaos-bot is started from an installed release bundle."
+      : upgradeStatus.upgrade_available
+        ? `The Web UI can download and install ${upgradeStatus.latest_version ?? "the latest release"} now. A launcher restart is still required after install.`
+        : upgradeStatus.reason ?? "No newer GitHub release is available for this installed bundle.";
 
   return (
     <section className={`panel config-panel ${compact ? "compact" : ""}`}>
@@ -688,6 +774,60 @@ export function ConfigPanel({
               />
             </label>
           </div>
+
+          <div className={`upgrade-card ${upgradeStatus?.upgrade_available ? "available" : ""}`}>
+            <div className="panel-head">
+              <h3>Web Upgrade</h3>
+              <button type="button" className="ghost-btn" onClick={() => void refreshUpgradeStatus()} disabled={busy}>
+                Refresh Upgrade
+              </button>
+            </div>
+
+            <div className="upgrade-copy">
+              <p className="upgrade-eyebrow">GitHub release installer</p>
+              <h4>{upgradeHeadline}</h4>
+              <p className="upgrade-body">{upgradeBody}</p>
+            </div>
+
+            <div className="config-meta">
+              <p>
+                installed <strong>{upgradeStatus?.current_version ?? "-"}</strong>
+              </p>
+              <p>
+                latest <strong>{upgradeStatus?.latest_version ?? "-"}</strong>
+              </p>
+              <p>
+                available <strong>{upgradeStatus?.upgrade_available ? "yes" : "no"}</strong>
+              </p>
+            </div>
+
+            {upgradeStatus?.repository ? <p className="upgrade-detail">repository: {upgradeStatus.repository}</p> : null}
+            {upgradeStatus?.install_prefix ? <p className="upgrade-detail">prefix: {upgradeStatus.install_prefix}</p> : null}
+            {upgradeStatus?.download_url ? <p className="upgrade-detail">bundle: {upgradeStatus.download_url}</p> : null}
+
+            <div className="config-actions">
+              <button
+                type="button"
+                data-testid="upgrade-apply-button"
+                onClick={() => void applyUpgrade()}
+                disabled={busy || !upgradeStatus?.supported || !upgradeStatus.upgrade_available}
+              >
+                {action === "upgrade" ? "Installing..." : "Install Latest Release"}
+              </button>
+              <button
+                type="button"
+                className="ghost-btn"
+                data-testid="upgrade-relaunch-button"
+                onClick={() => void relaunchUpgrade()}
+                disabled={busy || !upgradeStatus?.supported || !lastUpgradeResult?.relaunch_required}
+              >
+                {action === "relaunch" ? "Restarting..." : "Restart Now"}
+              </button>
+              <button type="button" className="ghost-btn" onClick={() => void restartRuntime()} disabled={busy}>
+                Restart Runtime
+              </button>
+            </div>
+          </div>
         </section>
       ) : null}
 
@@ -714,9 +854,11 @@ export function ConfigPanel({
         <button type="button" className="ghost-btn" onClick={() => void resetConfig()} disabled={busy}>
           Reset Config
         </button>
-        <button type="button" className="ghost-btn" onClick={() => void restartRuntime()} disabled={busy}>
-          Restart Runtime
-        </button>
+        {activeTab !== "system" ? (
+          <button type="button" className="ghost-btn" onClick={() => void restartRuntime()} disabled={busy}>
+            Restart Runtime
+          </button>
+        ) : null}
       </div>
 
       {status ? <p className="config-status">{status}</p> : null}
