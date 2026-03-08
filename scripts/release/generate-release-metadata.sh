@@ -14,6 +14,7 @@ declare git_short_sha=""
 declare commit_count=""
 declare github_repository=""
 declare latest_release_url=""
+declare notes_path=""
 
 while IFS='=' read -r key value; do
   case "${key}" in
@@ -32,8 +33,15 @@ while IFS='=' read -r key value; do
 done < <("${ROOT_DIR}/scripts/release/repository.sh")
 
 metadata_path="${OUTPUT_DIR}/release-metadata.json"
-notes_path="${OUTPUT_DIR}/release-notes.md"
 checksum_path="${OUTPUT_DIR}/release-metadata.sha256"
+
+while IFS='=' read -r key value; do
+  case "${key}" in
+    notes_path)
+      printf -v "${key}" '%s' "${value}"
+      ;;
+  esac
+done < <("${ROOT_DIR}/scripts/release/generate-release-notes.sh" "${OUTPUT_DIR}/release-notes.md")
 
 cat > "${metadata_path}" <<EOF
 {
@@ -55,19 +63,6 @@ cat > "${metadata_path}" <<EOF
     "${artifact_stem}-linux-x86_64.manifest.json"
   ]
 }
-EOF
-
-cat > "${notes_path}" <<EOF
-# chaos-bot ${release_version}
-
-- Base version: \`${base_version}\`
-- Release tag: \`${tag_name}\`
-- Commit: \`${git_short_sha}\`
-- Commit count: \`${commit_count}\`
-- Publish branch: \`master\`
-- Install bundle: \`${artifact_stem}-linux-x86_64.tar.gz\`
-
-This release includes the Linux x86_64 frontend/backend install bundle, checksum assets, and updater metadata consumed by the installed self-upgrade flow.
 EOF
 
 (cd "${OUTPUT_DIR}" && sha256sum "$(basename "${metadata_path}")" > "$(basename "${checksum_path}")")
