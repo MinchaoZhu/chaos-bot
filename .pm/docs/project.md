@@ -22,6 +22,7 @@
 - Every new feature must include a dedicated e2e testing phase before task completion.
 - Packaging must account for the existing Rust backend, React frontend, and Tauri shell layout in this mono-repo.
 - Versioning and publish automation should be compatible with GitHub Actions and the repository's `master` release branch policy.
+- Repository commit subject policy is enforced by `.githooks/pre-push`: each pushed commit must match `Feature: ...`, `Fix: ...`, or `Refactor: ...`.
 
 ## Assumptions To Validate During Execution
 

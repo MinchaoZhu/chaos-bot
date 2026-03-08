@@ -109,6 +109,15 @@ make test-e2e
 make test-all
 ```
 
+### 2.7 Git Hook 与 Commit 标题约束
+
+- 仓库启用了 `core.hooksPath=.githooks`，`push` 时会执行 `.githooks/pre-push`。
+- 所有待推送提交的标题（subject）必须匹配以下格式之一：
+  - `Feature: <summary>`
+  - `Fix: <summary>`
+  - `Refactor: <summary>`
+- 不符合上述格式的提交会被 pre-push hook 拒绝。
+
 ### 2.4 CI/CD 与版本发布
 
 - 仓库基础版本由根目录 `VERSION` 文件维护，并且必须与 `backend/Cargo.toml`、`frontend-react/package.json`、`src-tauri/Cargo.toml`、`src-tauri/tauri.conf.json` 保持一致。
