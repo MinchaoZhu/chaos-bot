@@ -88,7 +88,7 @@ if [[ -n "${github_repository}" ]]; then
 fi
 
 {
-  echo "# chaos-bot ${release_version}"
+  echo "# ${release_version}"
   echo
   echo "- Release type: ${release_kind}"
   echo "- Base version: \`${base_version}\`"

@@ -2,9 +2,119 @@
 
 Personal AI agent assistant with Rust backend, React shell, and Tauri v2 runtime.
 
-## Part 1: 功能、架构、技术栈
+## Part 1: 用户使用指南
 
-### 1.1 核心功能
+### 1.1 从 GitHub 安装
+
+发布版本会产出一个 Linux `x86_64` 安装包，可直接从 GitHub Releases 下载：
+
+- Releases 页面：`https://github.com/MinchaoZhu/chaos-bot/releases`
+- 资产命名：`<release-version>-linux-x86_64.tar.gz`
+- 版本标签：`v<release-version>`
+
+示例：
+
+```bash
+curl -fL -o chaos-bot.tar.gz \
+  https://github.com/MinchaoZhu/chaos-bot/releases/download/v0.1.1-master.123/0.1.1-master.123-linux-x86_64.tar.gz
+
+mkdir -p /tmp/chaos-bot-install
+tar -xzf chaos-bot.tar.gz -C /tmp/chaos-bot-install
+/tmp/chaos-bot-install/0.1.1-master.123-linux-x86_64/install.sh
+```
+
+默认会安装到：
+
+- `~/.local/share/chaos-bot/releases/<release-version>`
+- `~/.local/bin/chaos-bot`
+
+如需自定义安装前缀：
+
+```bash
+./install.sh --prefix /opt/chaos-bot
+```
+
+### 1.2 首次启动前配置
+
+API Key 通过环境变量注入，不写入配置文件：
+
+```bash
+export OPENAI_API_KEY=sk-...
+# 或
+export ANTHROPIC_API_KEY=sk-ant-...
+```
+
+首次启动会自动生成 `~/.chaos-bot/config.json`。最小配置示例：
+
+```json
+{
+  "llm": {
+    "provider": "openai",
+    "model": "gpt-5.2"
+  }
+}
+```
+
+支持的 provider：`openai` / `anthropic` / `gemini` / `mock`。
+
+### 1.3 使用方式
+
+安装完成后直接启动：
+
+```bash
+~/.local/bin/chaos-bot
+```
+
+默认行为：
+
+- 后端 API 监听 `127.0.0.1:3000`
+- 根路径 `/` 直接返回内置前端页面
+- 浏览器访问 `http://127.0.0.1:3000` 即可使用
+
+常用 API：
+
+- `GET /api/health`
+- `POST /api/chat`
+- `GET/POST /api/sessions`
+- `GET /api/config`
+- `POST /api/config/apply`
+- `GET /api/upgrade`
+- `POST /api/upgrade/apply`
+
+### 1.4 升级方式
+
+已安装的 Linux bundle 支持检查并应用最新 GitHub Release：
+
+```bash
+curl -fsS http://127.0.0.1:3000/api/upgrade
+curl -fsS -H 'content-type: application/json' -d '{}' http://127.0.0.1:3000/api/upgrade/apply
+```
+
+升级行为：
+
+- 新版本会安装到新的 `~/.local/share/chaos-bot/releases/<release-version>` 目录
+- `~/.local/bin/chaos-bot` 启动器会切换到新版本
+- 升级完成后需要重新启动 `~/.local/bin/chaos-bot`
+
+也可以手动下载新版本安装包，重复执行 `install.sh` 完成覆盖升级。
+
+### 1.5 日志与排障
+
+```bash
+tail -f ~/.chaos-bot/logs/$(date +%F).log
+```
+
+相关文件：
+
+- Runtime contract: `frontend-react/RUNTIME_CONTRACT.md`
+- PM runtime status: `AGENTS.md`
+- Tauri config: `src-tauri/tauri.conf.json`
+
+---
+
+## Part 2: 架构说明
+
+### 2.1 核心功能
 
 - 会话管理：创建/读取/删除会话，维护历史消息。
 - 聊天流式输出：`/api/chat` 基于 SSE 输出 `session/delta/tool_call/done/error` 事件。
@@ -12,7 +122,7 @@ Personal AI agent assistant with Rust backend, React shell, and Tauri v2 runtime
 - 配置中心：支持 `get/apply/reset/restart`，并带 `config.json.bak1/.bak2` 轮转备份。
 - 多端壳：同一份 runtime contract 同时服务 Web React Shell 与 Tauri Shell。
 
-### 1.2 架构分层（Backend DDD Frozen）
+### 2.2 架构分层（Backend DDD Frozen）
 
 ```text
 backend/src
@@ -33,7 +143,7 @@ backend/src
 3. `application` 只能依赖 `domain::ports`，不能直接依赖具体 adapter
 4. 反向依赖、跨层倒挂禁止
 
-### 1.3 前后端/Tauri 关系
+### 2.3 前后端/Tauri 关系
 
 - `frontend-react/`：UI 与交互层。
 - `src-tauri/`：Tauri invoke 桥接层。
@@ -41,7 +151,7 @@ backend/src
 - Web 模式链路：`frontend-react -> HTTP/SSE -> backend`
 - Tauri 模式链路：`frontend-react -> invoke -> src-tauri -> HTTP/SSE -> backend`
 
-### 1.4 技术栈
+### 2.4 技术栈
 
 - Backend: Rust, Axum, Tokio
 - Frontend: React 18, TypeScript, Vite
@@ -50,9 +160,9 @@ backend/src
 
 ---
 
-## Part 2: 开发指南（含 Agent 约束）
+## Part 3: 开发与发布指南
 
-### 2.1 环境准备
+### 3.1 环境准备
 
 - Rust toolchain
 - Node.js 20+
@@ -67,62 +177,41 @@ sudo apt-get install -y \
   libayatana-appindicator3-dev
 ```
 
-### 2.2 启动命令（后端 / 前端 / Tauri）
+### 3.2 启动命令（后端 / 前端 / Tauri）
 
 ```bash
-# 安装前端依赖
 make frontend-install
-
-# 启动后端（默认 3000）
 make run
-
-# 启动前端开发服务器（默认 1420）
-# 建议开发联调时让前端代理到后端
 VITE_BACKEND_PROXY_TARGET=http://127.0.0.1:3000 make frontend-dev
-
-# 启动 Tauri Desktop Dev Shell
 make tauri-dev
-
-# Tauri 环境检查
 make tauri-preflight
-
-# Tauri Desktop Debug Build（不打包原生 bundle）
 make tauri-build-desktop
 ```
 
-### 2.3 测试命令
+### 3.3 测试命令
 
 ```bash
-# 单元 + 集成
 make test
-
-# 仅单元
 make test-unit
-
-# 仅集成
 make test-integration
-
-# 仅 e2e (Playwright)
 make test-e2e
-
-# 全量门禁（必过）
 make test-all
 ```
 
-### 2.4 CI/CD 与版本发布
+### 3.4 CI/CD 与版本发布
 
 - 仓库基础版本由根目录 `VERSION` 文件维护，并且必须与 `backend/Cargo.toml`、`frontend-react/package.json`、`src-tauri/Cargo.toml`、`src-tauri/tauri.conf.json` 保持一致。
+- 所有 `push` 都必须更新当前提交中的 `VERSION`；如果与 push 之前的分支版本相同，CI 会直接失败。
 - 本地发布前校验命令：`make release-check`
 - 本地 Linux 安装包构建命令：`make package-linux-x86_64`
 - 本地安装包验证命令：`make package-verify`
 - 本地自升级验证命令：`make upgrade-verify`
 - GitHub Actions 在 `master` push 时执行完整门禁并发布 GitHub Release。
 - 发布标签格式为 `v<base-version>-master.<commit-count>`，例如 `v0.1.0-master.123`。
-- 当前发布资产包含 `chaos-bot-<release>-linux-x86_64.tar.gz`、对应 `.sha256`、bundle manifest，以及 release metadata/checksum。
-- Linux 安装包解压后包含 `install.sh`，默认安装到 `~/.local/share/chaos-bot/releases/<release>`，并生成 `~/.local/bin/chaos-bot` 启动器；启动器会自动设置 `CHAOS_BOT_FRONTEND_DIST`，由后端直接提供打包后的前端静态资源。
-- 已安装的 Linux bundle 运行时可通过 `GET /api/upgrade` 与 `POST /api/upgrade/apply` 查询并安装最新 GitHub Release；升级成功后需要重新启动 `~/.local/bin/chaos-bot` 才会切换到新版本。
+- GitHub Release 标题使用纯版本号：`<base-version>-master.<commit-count>`。
+- 当前发布资产包含 `release-metadata.json`、`release-metadata.sha256`、`<release-version>-linux-x86_64.tar.gz`、对应 `.sha256` 与 bundle manifest。
 
-### 2.4 Agent 开发指南
+### 3.5 Agent 开发指南
 
 新增 agent 能力时，必须遵守：
 
@@ -132,7 +221,7 @@ make test-all
 - 具体 adapter 注入必须在 `runtime` 完成。
 - `README.md` 是架构/运行/测试单一文档入口，不新增根级 `docs/` 主文档。
 
-### 2.5 架构与交付约束（必须）
+### 3.6 架构与交付约束（必须）
 
 - Backend 根目录只允许五层 + `lib.rs`：
   `application/ domain/ infrastructure/ interface/ runtime/ lib.rs`
@@ -144,101 +233,10 @@ make test-all
   - 对应测试（至少 e2e 主路径）完成
 - 所有任务完成前必须通过 `make test-all`。
 
-### 2.6 Runtime / Config 规则
+### 3.7 Runtime / Config 规则
 
 - 默认配置路径：`~/.chaos-bot/config.json`
 - 兼容回退：若无 `config.json` 且存在 `~/.chaos-bot/agent.json`，读取 `agent.json`
 - 启动自动物化默认配置
 - Secret 合并顺序：先环境变量，再配置文件覆盖
 - 每次写配置都旋转：`config.json.bak1`、`config.json.bak2`
-
----
-
-## Part 3: 使用说明（怎么用、有哪些功能）
-
-### 3.1 快速开始（Web 模式）
-
-**第一步：配置 API Key**
-
-API Key 通过环境变量注入，不写入配置文件：
-
-```bash
-export OPENAI_API_KEY=sk-...       # OpenAI
-# 或
-export ANTHROPIC_API_KEY=sk-ant-... # Anthropic / Claude
-```
-
-**第二步：确认模型配置**
-
-启动时自动物化 `~/.chaos-bot/config.json`，可按需修改：
-
-```json
-{
-  "llm": {
-    "provider": "openai",
-    "model": "gpt-5.2"
-  }
-}
-```
-
-支持的 provider：`openai` / `anthropic` / `gemini`。
-
-**第三步：启动服务**
-
-```bash
-# 终端 1 — 后端（API 默认 :3000）
-make run
-
-# 终端 2 — 前端 dev server（UI 默认 :1420，/api/* 代理到后端）
-VITE_BACKEND_PROXY_TARGET=http://127.0.0.1:3000 make frontend-dev
-```
-
-**第四步：打开浏览器**
-
-访问 `http://localhost:1420`，应用自动将 API 请求代理到后端，无需手动填写 URL。
-
-### 3.2 主要功能面板
-
-- Sessions
-  - `Refresh`：刷新健康状态和会话列表
-  - `New`：创建新会话
-- Conversation
-  - 输入消息后 `Send`，实时流式显示 assistant 回复
-- Stream Events
-  - 查看 SSE 事件与 tool call 轨迹，便于排障
-- Config（新增）
-  - `Reload Config`：获取运行态/磁盘配置
-  - `Apply Config`：应用编辑后的 raw JSON 配置
-  - `Reset Config`：将磁盘配置重置到运行快照
-  - `Restart Runtime`：请求进程重启（可被运行模式禁用）
-
-### 3.3 API 入口（常用）
-
-- `GET /api/health`
-- `POST /api/chat` (SSE)
-- `GET/POST /api/sessions`
-- `GET/DELETE /api/sessions/:id`
-- `GET /api/config`
-- `POST /api/config/apply`
-- `POST /api/config/reset`
-- `POST /api/config/restart`
-- `GET /api/channels/status`
-- `POST /api/channels/telegram/webhook`
-- `GET /api/skills`
-- `GET /api/skills/:id`
-
-### 3.4 日志与排障
-
-```bash
-# 查看当日日志
-tail -f ~/.chaos-bot/logs/$(date +%F).log
-
-# 清理运行时产物和 .tmp
-make clean-runtime
-```
-
-### 3.5 相关文件
-
-- Runtime contract: `frontend-react/RUNTIME_CONTRACT.md`
-- PM runtime status: `AGENTS.md`
-- Tauri config: `src-tauri/tauri.conf.json`
