@@ -67,7 +67,9 @@ impl ChannelDispatcherPort for ChannelDispatcherRegistry {
     }
 }
 
-pub async fn build_dispatcher(config: &AppConfig) -> Result<Option<Arc<dyn ChannelDispatcherPort>>> {
+pub async fn build_dispatcher(
+    config: &AppConfig,
+) -> Result<Option<Arc<dyn ChannelDispatcherPort>>> {
     let mut registry = ChannelDispatcherRegistry::new();
 
     if config.telegram_enabled {

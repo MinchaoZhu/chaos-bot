@@ -66,10 +66,7 @@ impl SkillPort for SkillStore {
         if !creator_dir.exists() {
             fs::create_dir_all(&creator_dir).await?;
             fs::write(creator_dir.join("SKILL.md"), DEFAULT_SKILL_CREATOR_MD).await?;
-            tracing::info!(
-                skill_id = "skill-creator",
-                "seeded built-in skill"
-            );
+            tracing::info!(skill_id = "skill-creator", "seeded built-in skill");
         }
         Ok(())
     }
@@ -121,7 +118,11 @@ impl SkillPort for SkillStore {
         let (name, description, body) = parse_skill_md(&content);
         let meta = SkillMeta {
             id: id.to_string(),
-            name: if name.is_empty() { id.to_string() } else { name },
+            name: if name.is_empty() {
+                id.to_string()
+            } else {
+                name
+            },
             description,
         };
         Ok(SkillDetail { meta, body })

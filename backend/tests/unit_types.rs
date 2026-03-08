@@ -1,5 +1,7 @@
+use chaos_bot_backend::domain::chat::{
+    ChannelContext, ChannelDelivery, InboundChannelMessage, OutboundChannelMessage,
+};
 use chaos_bot_backend::domain::types::*;
-use chaos_bot_backend::domain::chat::{ChannelContext, ChannelDelivery, InboundChannelMessage, OutboundChannelMessage};
 use pretty_assertions::assert_eq;
 
 #[test]

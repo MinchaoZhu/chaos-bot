@@ -4,8 +4,8 @@ use crate::domain::chat::{
     OutboundChannelMessage,
 };
 use crate::domain::ports::ChannelDispatcherPort;
-use crate::domain::{audit, AppError};
 use crate::domain::types::SessionState;
+use crate::domain::{audit, AppError};
 use crate::infrastructure::session_store::SessionStore;
 use serde_json::json;
 use std::sync::Arc;
@@ -50,8 +50,9 @@ impl ChatService {
             "api chat request"
         );
 
-        let (session_id, mut session) =
-            self.resolve_session(command.session_id, command.channel.clone()).await;
+        let (session_id, mut session) = self
+            .resolve_session(command.session_id, command.channel.clone())
+            .await;
         on_event(ChatEvent::Session {
             session_id: session_id.clone(),
         });
@@ -165,7 +166,8 @@ impl ChatService {
             None => {
                 if let Some(channel) = channel {
                     let channel_key = channel_session_key(&channel);
-                    if let Some(existing) = self.sessions.session_for_channel_key(&channel_key).await
+                    if let Some(existing) =
+                        self.sessions.session_for_channel_key(&channel_key).await
                     {
                         tracing::info!(
                             channel = %channel.channel,

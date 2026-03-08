@@ -1,8 +1,8 @@
-use crate::runtime::config_runtime::ConfigRuntime;
 use crate::domain::config::{
     ConfigMutationInput, ConfigMutationResponse, ConfigRestartInput, ConfigStateResponse,
 };
 use crate::domain::{audit, AppError};
+use crate::runtime::config_runtime::ConfigRuntime;
 use std::sync::Arc;
 
 #[derive(Clone)]

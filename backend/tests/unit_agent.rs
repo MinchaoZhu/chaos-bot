@@ -1,9 +1,9 @@
 mod support;
 
 use chaos_bot_backend::application::agent::AgentLoop;
-use chaos_bot_backend::infrastructure::model::LlmStreamEvent;
-use chaos_bot_backend::infrastructure::memory::MemoryHit;
 use chaos_bot_backend::domain::types::{Message, SessionState, ToolCall};
+use chaos_bot_backend::infrastructure::memory::MemoryHit;
+use chaos_bot_backend::infrastructure::model::LlmStreamEvent;
 use serde_json::json;
 use std::sync::Arc;
 use support::*;
@@ -79,7 +79,10 @@ fn enforce_token_budget_removes_middle_messages() {
     // Should keep at least system + one other
     assert!(messages.len() >= 2);
     // System should always be first
-    assert_eq!(messages[0].role, chaos_bot_backend::domain::types::Role::System);
+    assert_eq!(
+        messages[0].role,
+        chaos_bot_backend::domain::types::Role::System
+    );
 }
 
 #[test]

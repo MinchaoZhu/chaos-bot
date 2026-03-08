@@ -6,20 +6,21 @@ use std::sync::Arc;
 use tokio::sync::RwLock;
 use tokio::time::{sleep, Duration};
 
-use crate::application::ChatService;
 use crate::application::agent::{AgentConfig, AgentLoop};
+use crate::application::ChatService;
 use crate::domain::ports::{MemoryPort, SkillPort, ToolExecutorPort};
-use crate::interface::api::AppState;
 use crate::infrastructure::channels::build_dispatcher;
 use crate::infrastructure::channels::telegram::poll_updates_once;
-use crate::runtime::bootstrap::bootstrap_runtime_dirs;
 use crate::infrastructure::config::{workspace_base_for, AgentFileConfig, AppConfig, EnvSecrets};
-use crate::runtime::config_runtime::{AgentFactory, ConfigRuntime, RestartMode};
-use crate::infrastructure::model;
 use crate::infrastructure::memory::MemoryStore;
+use crate::infrastructure::model;
 use crate::infrastructure::personality::{PersonalityLoader, PersonalitySource};
 use crate::infrastructure::skills::SkillStore;
 use crate::infrastructure::tooling::ToolRegistry;
+use crate::infrastructure::upgrade::GitHubReleaseUpdater;
+use crate::interface::api::AppState;
+use crate::runtime::bootstrap::bootstrap_runtime_dirs;
+use crate::runtime::config_runtime::{AgentFactory, ConfigRuntime, RestartMode};
 
 struct BackendAgentFactory;
 
@@ -34,6 +35,7 @@ pub async fn build_app(config: &AppConfig) -> Result<AppState> {
     let agent = build_agent_loop(config).await?;
     let channel_dispatcher = build_dispatcher(config).await?;
     let skills: Arc<dyn SkillPort> = Arc::new(SkillStore::new(config.skills_dir.clone()));
+    let upgrades = Arc::new(GitHubReleaseUpdater::new()?);
     let state = AppState::new(
         agent,
         channel_dispatcher,
@@ -41,8 +43,10 @@ pub async fn build_app(config: &AppConfig) -> Result<AppState> {
         config.telegram_enabled,
         config.telegram_polling,
         config.telegram_api_base_url.clone(),
+        config.frontend_dist.clone(),
     )
-    .with_skills(skills);
+    .with_skills(skills)
+    .with_upgrade(upgrades);
     maybe_spawn_telegram_poller(state.clone(), config);
     Ok(state)
 }
@@ -72,6 +76,7 @@ pub async fn build_app_with_config_runtime(
     ));
 
     let skills: Arc<dyn SkillPort> = Arc::new(SkillStore::new(config.skills_dir.clone()));
+    let upgrades = Arc::new(GitHubReleaseUpdater::new()?);
     let state = AppState::with_config_runtime(
         agent_slot,
         runtime,
@@ -80,8 +85,10 @@ pub async fn build_app_with_config_runtime(
         config.telegram_enabled,
         config.telegram_polling,
         config.telegram_api_base_url.clone(),
+        config.frontend_dist.clone(),
     )
-    .with_skills(skills);
+    .with_skills(skills)
+    .with_upgrade(upgrades);
     maybe_spawn_telegram_poller(state.clone(), config);
     Ok(state)
 }
@@ -156,10 +163,16 @@ fn maybe_spawn_telegram_poller(state: AppState, config: &AppConfig) {
     tokio::spawn(async move {
         let client = reqwest::Client::new();
         let mut offset: i64 = 0;
-        tracing::info!(channel = "telegram", mode = "polling", "telegram poller started");
+        tracing::info!(
+            channel = "telegram",
+            mode = "polling",
+            "telegram poller started"
+        );
 
         loop {
-            let updates = match poll_updates_once(&client, &api_base_url, &bot_token, offset, 15).await {
+            let updates = match poll_updates_once(&client, &api_base_url, &bot_token, offset, 15)
+                .await
+            {
                 Ok(items) => items,
                 Err(error) => {
                     tracing::warn!(channel = "telegram", mode = "polling", error = %error, "telegram poller request failed");

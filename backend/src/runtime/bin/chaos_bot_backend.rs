@@ -2,8 +2,8 @@ use anyhow::Result;
 use chaos_bot_backend::infrastructure::config::AppConfig;
 use chaos_bot_backend::infrastructure::logging::init_logging;
 use chaos_bot_backend::interface::api::router;
-use chaos_bot_backend::runtime::{build_app_with_config_runtime, shutdown_signal};
 use chaos_bot_backend::runtime::config_runtime::RestartMode;
+use chaos_bot_backend::runtime::{build_app_with_config_runtime, shutdown_signal};
 use tokio::net::TcpListener;
 use tracing::info;
 
@@ -65,6 +65,7 @@ mod tests {
             personality_dir: temp.path().join("personality"),
             memory_dir: temp.path().join("memory"),
             memory_file: temp.path().join("MEMORY.md"),
+            frontend_dist: None,
             ..AppConfig::default()
         };
 

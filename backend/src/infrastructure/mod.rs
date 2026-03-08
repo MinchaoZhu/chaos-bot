@@ -1,10 +1,11 @@
-pub mod config;
 pub mod channels;
+pub mod config;
 pub mod logging;
 pub mod memory;
+pub mod model;
 pub mod personality;
 pub mod runtime_assets;
 pub mod session_store;
-pub mod model;
 pub mod skills;
 pub mod tooling;
+pub mod upgrade;

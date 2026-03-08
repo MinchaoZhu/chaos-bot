@@ -1,6 +1,6 @@
-use chaos_bot_backend::infrastructure::model::*;
-use chaos_bot_backend::infrastructure::config::AppConfig;
 use chaos_bot_backend::domain::types::*;
+use chaos_bot_backend::infrastructure::config::AppConfig;
+use chaos_bot_backend::infrastructure::model::*;
 use serde_json::json;
 use std::collections::{HashMap, VecDeque};
 

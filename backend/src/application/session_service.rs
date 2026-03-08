@@ -1,6 +1,6 @@
+use crate::domain::types::SessionState;
 use crate::domain::AppError;
 use crate::infrastructure::session_store::SessionStore;
-use crate::domain::types::SessionState;
 
 #[derive(Clone)]
 pub struct SessionService {

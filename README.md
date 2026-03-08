@@ -109,6 +109,19 @@ make test-e2e
 make test-all
 ```
 
+### 2.4 CI/CD 与版本发布
+
+- 仓库基础版本由根目录 `VERSION` 文件维护，并且必须与 `backend/Cargo.toml`、`frontend-react/package.json`、`src-tauri/Cargo.toml`、`src-tauri/tauri.conf.json` 保持一致。
+- 本地发布前校验命令：`make release-check`
+- 本地 Linux 安装包构建命令：`make package-linux-x86_64`
+- 本地安装包验证命令：`make package-verify`
+- 本地自升级验证命令：`make upgrade-verify`
+- GitHub Actions 在 `master` push 时执行完整门禁并发布 GitHub Release。
+- 发布标签格式为 `v<base-version>-master.<commit-count>`，例如 `v0.1.0-master.123`。
+- 当前发布资产包含 `chaos-bot-<release>-linux-x86_64.tar.gz`、对应 `.sha256`、bundle manifest，以及 release metadata/checksum。
+- Linux 安装包解压后包含 `install.sh`，默认安装到 `~/.local/share/chaos-bot/releases/<release>`，并生成 `~/.local/bin/chaos-bot` 启动器；启动器会自动设置 `CHAOS_BOT_FRONTEND_DIST`，由后端直接提供打包后的前端静态资源。
+- 已安装的 Linux bundle 运行时可通过 `GET /api/upgrade` 与 `POST /api/upgrade/apply` 查询并安装最新 GitHub Release；升级成功后需要重新启动 `~/.local/bin/chaos-bot` 才会切换到新版本。
+
 ### 2.4 Agent 开发指南
 
 新增 agent 能力时，必须遵守：
@@ -229,4 +242,3 @@ make clean-runtime
 - Runtime contract: `frontend-react/RUNTIME_CONTRACT.md`
 - PM runtime status: `AGENTS.md`
 - Tauri config: `src-tauri/tauri.conf.json`
-

@@ -1,21 +1,25 @@
 use crate::application::agent::AgentLoop;
-use crate::application::{ChatService, ConfigService, SessionService};
+use crate::application::{ChatService, ConfigService, SessionService, UpgradeService};
 use crate::domain::chat::{ChatCommand, ChatEvent, ToolEvent};
-use crate::domain::ports::ChannelDispatcherPort;
 use crate::domain::config::{
     ConfigMutationInput, ConfigMutationResponse, ConfigRestartInput, ConfigStateResponse,
 };
-use crate::infrastructure::config::AgentFileConfig;
+use crate::domain::ports::ChannelDispatcherPort;
 use crate::domain::ports::SkillPort;
+use crate::domain::ports::UpgradePort;
 use crate::domain::skills::{SkillDetail, SkillMeta};
-use crate::domain::AppError;
 use crate::domain::types::SessionState;
+use crate::domain::upgrade::{UpgradeApplyResult, UpgradeStatus};
+use crate::domain::AppError;
 use crate::infrastructure::channels::telegram::TelegramWebhookUpdate;
+use crate::infrastructure::config::AgentFileConfig;
 use crate::infrastructure::session_store::SessionStore;
 use crate::infrastructure::skills::EmptySkillStore;
 use crate::runtime::config_runtime::ConfigRuntime;
-use axum::http::HeaderMap;
+use axum::body::Body;
 use axum::extract::{Path, State};
+use axum::http::HeaderMap;
+use axum::http::{header, Response, StatusCode, Uri};
 use axum::response::sse::{Event, KeepAlive, Sse};
 use axum::routing::{get, post};
 use axum::{Json, Router};
@@ -24,6 +28,7 @@ use futures::Stream;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use std::convert::Infallible;
+use std::path::{Component, PathBuf};
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::{mpsc, RwLock};
@@ -40,6 +45,8 @@ pub struct AppState {
     pub telegram_polling: bool,
     pub telegram_api_base_url: String,
     pub skills: Arc<dyn SkillPort>,
+    pub frontend_dist: Option<PathBuf>,
+    pub upgrades: Option<Arc<dyn UpgradePort>>,
 }
 
 impl AppState {
@@ -50,6 +57,7 @@ impl AppState {
         telegram_enabled: bool,
         telegram_polling: bool,
         telegram_api_base_url: String,
+        frontend_dist: Option<PathBuf>,
     ) -> Self {
         Self {
             agent: Arc::new(RwLock::new(agent)),
@@ -61,6 +69,8 @@ impl AppState {
             telegram_polling,
             telegram_api_base_url,
             skills: Arc::new(EmptySkillStore),
+            frontend_dist,
+            upgrades: None,
         }
     }
 
@@ -72,6 +82,7 @@ impl AppState {
         telegram_enabled: bool,
         telegram_polling: bool,
         telegram_api_base_url: String,
+        frontend_dist: Option<PathBuf>,
     ) -> Self {
         Self {
             agent,
@@ -83,11 +94,18 @@ impl AppState {
             telegram_polling,
             telegram_api_base_url,
             skills: Arc::new(EmptySkillStore),
+            frontend_dist,
+            upgrades: None,
         }
     }
 
     pub fn with_skills(mut self, skills: Arc<dyn SkillPort>) -> Self {
         self.skills = skills;
+        self
+    }
+
+    pub fn with_upgrade(mut self, upgrades: Arc<dyn UpgradePort>) -> Self {
+        self.upgrades = Some(upgrades);
         self
     }
 
@@ -150,7 +168,78 @@ pub fn router(state: AppState) -> Router {
         .route("/api/config/restart", post(restart_config))
         .route("/api/skills", get(list_skills))
         .route("/api/skills/:id", get(get_skill))
+        .route("/api/upgrade", get(get_upgrade_status))
+        .route("/api/upgrade/apply", post(apply_upgrade))
+        .fallback(get(frontend))
         .with_state(state)
+}
+
+async fn frontend(State(state): State<AppState>, uri: Uri) -> Result<Response<Body>, StatusCode> {
+    let Some(frontend_dist) = state.frontend_dist.as_ref() else {
+        return Err(StatusCode::NOT_FOUND);
+    };
+
+    let request_path = uri.path().trim_start_matches('/');
+    if request_path == "api" || request_path.starts_with("api/") {
+        return Err(StatusCode::NOT_FOUND);
+    }
+
+    let file_path = resolve_frontend_asset_path(frontend_dist, request_path)?;
+    let resolved_path = match tokio::fs::metadata(&file_path).await {
+        Ok(metadata) if metadata.is_file() => file_path,
+        _ => frontend_dist.join("index.html"),
+    };
+    let bytes = tokio::fs::read(&resolved_path)
+        .await
+        .map_err(|_| StatusCode::NOT_FOUND)?;
+
+    Response::builder()
+        .status(StatusCode::OK)
+        .header(header::CONTENT_TYPE, content_type_for(&resolved_path))
+        .body(Body::from(bytes))
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)
+}
+
+fn resolve_frontend_asset_path(
+    frontend_dist: &std::path::Path,
+    request_path: &str,
+) -> Result<PathBuf, StatusCode> {
+    let relative = if request_path.is_empty() {
+        PathBuf::from("index.html")
+    } else {
+        let candidate = PathBuf::from(request_path);
+        if candidate.components().any(|component| {
+            matches!(
+                component,
+                Component::ParentDir | Component::RootDir | Component::Prefix(_)
+            )
+        }) {
+            return Err(StatusCode::BAD_REQUEST);
+        }
+        if request_path.ends_with('/') {
+            candidate.join("index.html")
+        } else {
+            candidate
+        }
+    };
+
+    Ok(frontend_dist.join(relative))
+}
+
+fn content_type_for(path: &std::path::Path) -> &'static str {
+    match path.extension().and_then(|extension| extension.to_str()) {
+        Some("html") => "text/html; charset=utf-8",
+        Some("css") => "text/css; charset=utf-8",
+        Some("js") => "application/javascript; charset=utf-8",
+        Some("json") => "application/json; charset=utf-8",
+        Some("svg") => "image/svg+xml",
+        Some("png") => "image/png",
+        Some("jpg") | Some("jpeg") => "image/jpeg",
+        Some("woff2") => "font/woff2",
+        Some("woff") => "font/woff",
+        Some("ttf") => "font/ttf",
+        _ => "application/octet-stream",
+    }
 }
 
 async fn health() -> Json<HealthResponse> {
@@ -165,10 +254,9 @@ async fn channel_status(
 ) -> Result<Json<ChannelStatusResponse>, AppError> {
     let (enabled_channels, connectors) = if let Some(dispatcher) = &state.channel_dispatcher {
         let channels = dispatcher.enabled_channels();
-        let health = dispatcher
-            .health_summary()
-            .await
-            .map_err(|error| AppError::internal(format!("failed to load channel health: {error}")))?;
+        let health = dispatcher.health_summary().await.map_err(|error| {
+            AppError::internal(format!("failed to load channel health: {error}"))
+        })?;
         (channels, health)
     } else {
         (Vec::new(), Vec::new())
@@ -387,6 +475,20 @@ async fn get_skill(
         .await
         .map_err(|_| AppError::not_found("skill not found"))?;
     Ok(Json(skill))
+}
+
+async fn get_upgrade_status(
+    State(state): State<AppState>,
+) -> Result<Json<UpgradeStatus>, AppError> {
+    let service = UpgradeService::new(state.upgrades.clone());
+    Ok(Json(service.status().await?))
+}
+
+async fn apply_upgrade(
+    State(state): State<AppState>,
+) -> Result<Json<UpgradeApplyResult>, AppError> {
+    let service = UpgradeService::new(state.upgrades.clone());
+    Ok(Json(service.apply().await?))
 }
 
 fn chat_event_to_sse(event: ChatEvent) -> Event {

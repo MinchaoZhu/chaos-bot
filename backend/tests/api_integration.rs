@@ -4,12 +4,12 @@ use axum::body::{to_bytes, Body};
 use axum::http::{Request, StatusCode};
 use axum::routing::post;
 use axum::{Json, Router};
-use chaos_bot_backend::interface::api::router;
+use chaos_bot_backend::domain::types::{SessionState, ToolCall};
 use chaos_bot_backend::infrastructure::channels::telegram::TelegramConnector;
 use chaos_bot_backend::infrastructure::channels::ChannelDispatcherRegistry;
 use chaos_bot_backend::infrastructure::config::EnvSecrets;
 use chaos_bot_backend::infrastructure::model::LlmStreamEvent;
-use chaos_bot_backend::domain::types::{SessionState, ToolCall};
+use chaos_bot_backend::interface::api::router;
 use serde_json::{json, Value};
 use std::sync::{Arc, Mutex};
 use support::*;
@@ -479,7 +479,10 @@ async fn config_api_apply_reset_restart_lifecycle() {
     let body = to_bytes(apply_res.into_body(), usize::MAX).await.unwrap();
     let apply_json: Value = serde_json::from_slice(&body).unwrap();
     assert_eq!(apply_json["state"]["running"]["llm"]["model"], "mock-next");
-    assert_eq!(apply_json["state"]["running"]["search"]["provider"], "brave");
+    assert_eq!(
+        apply_json["state"]["running"]["search"]["provider"],
+        "brave"
+    );
     assert_eq!(
         apply_json["state"]["running"]["secrets"]["brave_search_api_key"],
         "brave-key-next"
@@ -608,7 +611,9 @@ async fn spawn_mock_telegram_api() -> (String, Arc<Mutex<Vec<Value>>>) {
     let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
     let addr = listener.local_addr().unwrap();
     tokio::spawn(async move {
-        axum::serve(listener, app.into_make_service()).await.unwrap();
+        axum::serve(listener, app.into_make_service())
+            .await
+            .unwrap();
     });
 
     (format!("http://{addr}"), captured)

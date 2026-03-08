@@ -404,7 +404,10 @@ fn from_inputs_applies_telegram_channel_and_secret_settings() {
     let config = AppConfig::from_inputs(file_config, env_secrets, home);
 
     assert!(config.telegram_enabled);
-    assert_eq!(config.telegram_webhook_secret.as_deref(), Some("secret-123"));
+    assert_eq!(
+        config.telegram_webhook_secret.as_deref(),
+        Some("secret-123")
+    );
     assert_eq!(
         config.telegram_webhook_base_url.as_deref(),
         Some("https://example.test/hook")

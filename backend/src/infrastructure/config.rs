@@ -44,6 +44,7 @@ pub struct AppConfig {
     pub memory_dir: PathBuf,
     pub memory_file: PathBuf,
     pub skills_dir: PathBuf,
+    pub frontend_dist: Option<PathBuf>,
 }
 
 #[derive(Clone, Debug)]
@@ -89,6 +90,7 @@ impl Default for AppConfig {
             memory_dir: workspace.join("memory"),
             memory_file: workspace.join("MEMORY.md"),
             skills_dir: workspace.join("skills"),
+            frontend_dist: frontend_dist_from_env(&cwd),
             workspace,
         }
     }
@@ -128,6 +130,7 @@ impl AppConfig {
         let workspace_base = workspace_base_for(&cwd);
         let mut app = Self::from_inputs(file_config.clone(), env_secrets, workspace_base);
         app.config_path = config_path;
+        app.frontend_dist = frontend_dist_from_env(&cwd);
         Ok((app, file_config, raw))
     }
 
@@ -267,6 +270,7 @@ impl AppConfig {
             memory_dir: workspace.join("memory"),
             memory_file: workspace.join("MEMORY.md"),
             skills_dir: workspace.join("skills"),
+            frontend_dist: None,
             workspace,
         }
     }
@@ -456,6 +460,18 @@ fn resolve_config_path(cwd: &Path, path: &Path) -> PathBuf {
         path.to_path_buf()
     } else {
         cwd.join(path)
+    }
+}
+
+fn frontend_dist_from_env(cwd: &Path) -> Option<PathBuf> {
+    let value = env::var_os("CHAOS_BOT_FRONTEND_DIST")?;
+    let path = PathBuf::from(value);
+    if path.as_os_str().is_empty() {
+        None
+    } else if path.is_absolute() {
+        Some(path)
+    } else {
+        Some(cwd.join(path))
     }
 }
 

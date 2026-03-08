@@ -1,12 +1,12 @@
-use crate::infrastructure::config::AppConfig;
 use crate::domain::chat::ToolEvent;
 use crate::domain::ports::{
     MemoryHit, MemoryPort, ModelPort, ModelRequest, SkillPort, ToolExecutionContext,
     ToolExecutorPort,
 };
 use crate::domain::skills::SkillMeta;
-use crate::infrastructure::personality::PersonalitySource;
 use crate::domain::types::{Message, SessionState, ToolResult, Usage};
+use crate::infrastructure::config::AppConfig;
+use crate::infrastructure::personality::PersonalitySource;
 use anyhow::Result;
 use futures::StreamExt;
 use serde::Serialize;
@@ -115,22 +115,21 @@ impl AgentLoop {
         };
 
         // Check for /activate <skill-id> command to inject full skill body.
-        let activated_skill_body =
-            if let Some(skill_id) = user_input.strip_prefix("/activate ") {
-                let skill_id = skill_id.trim();
-                match self.skills.get(skill_id).await {
-                    Ok(detail) => {
-                        tracing::info!(skill_id = %skill_id, "skill activated");
-                        Some(detail.body)
-                    }
-                    Err(error) => {
-                        tracing::warn!(skill_id = %skill_id, error = %error, "skill not found");
-                        None
-                    }
+        let activated_skill_body = if let Some(skill_id) = user_input.strip_prefix("/activate ") {
+            let skill_id = skill_id.trim();
+            match self.skills.get(skill_id).await {
+                Ok(detail) => {
+                    tracing::info!(skill_id = %skill_id, "skill activated");
+                    Some(detail.body)
                 }
-            } else {
-                None
-            };
+                Err(error) => {
+                    tracing::warn!(skill_id = %skill_id, error = %error, "skill not found");
+                    None
+                }
+            }
+        } else {
+            None
+        };
 
         tracing::debug!(
             session_id = %session.id,

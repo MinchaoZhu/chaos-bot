@@ -4,19 +4,20 @@
 use anyhow::Result;
 use async_trait::async_trait;
 use chaos_bot_backend::application::agent::{AgentConfig, AgentLoop};
-use chaos_bot_backend::interface::api::AppState;
+use chaos_bot_backend::domain::types::{Message, ToolCall, ToolExecution, ToolSpec, Usage};
 use chaos_bot_backend::infrastructure::config::{
-    write_config_file, AgentChannelsConfig, AgentFileConfig, AgentLlmConfig,
-    AgentLoggingConfig, AgentSearchConfig, AgentSecretsConfig, AgentServerConfig, AppConfig,
-    EnvSecrets,
+    write_config_file, AgentChannelsConfig, AgentFileConfig, AgentLlmConfig, AgentLoggingConfig,
+    AgentSearchConfig, AgentSecretsConfig, AgentServerConfig, AppConfig, EnvSecrets,
 };
-use chaos_bot_backend::runtime::config_runtime::{AgentFactory, ConfigRuntime, RestartMode};
-use chaos_bot_backend::infrastructure::model::{LlmProvider, LlmRequest, LlmResponse, LlmStream, LlmStreamEvent};
 use chaos_bot_backend::infrastructure::memory::{MemoryBackend, MemoryStore};
+use chaos_bot_backend::infrastructure::model::{
+    LlmProvider, LlmRequest, LlmResponse, LlmStream, LlmStreamEvent,
+};
 use chaos_bot_backend::infrastructure::personality::{PersonalityLoader, PersonalitySource};
 use chaos_bot_backend::infrastructure::skills::EmptySkillStore;
 use chaos_bot_backend::infrastructure::tooling::{Tool, ToolContext, ToolRegistry};
-use chaos_bot_backend::domain::types::{Message, ToolCall, ToolExecution, ToolSpec, Usage};
+use chaos_bot_backend::interface::api::AppState;
+use chaos_bot_backend::runtime::config_runtime::{AgentFactory, ConfigRuntime, RestartMode};
 use futures::stream;
 use serde_json::{json, Value};
 use std::path::PathBuf;
@@ -298,6 +299,7 @@ pub fn build_test_state_with_registry(
         false,
         false,
         "https://api.telegram.org".to_string(),
+        None,
     );
 
     (temp, state)
@@ -407,8 +409,11 @@ pub async fn build_test_state_with_config_runtime_with_env(
         secrets: AgentSecretsConfig::default(),
     };
 
-    let mut app_config =
-        AppConfig::from_inputs(config_file.clone(), env_secrets.clone(), workspace_base.clone());
+    let mut app_config = AppConfig::from_inputs(
+        config_file.clone(),
+        env_secrets.clone(),
+        workspace_base.clone(),
+    );
     let config_path = workspace_base.join(".chaos-bot/config.json");
     app_config.config_path = config_path.clone();
     write_config_file(&config_path, &config_file).expect("write config");
@@ -439,6 +444,7 @@ pub async fn build_test_state_with_config_runtime_with_env(
         false,
         false,
         "https://api.telegram.org".to_string(),
+        None,
     );
     (temp, state, config_path)
 }

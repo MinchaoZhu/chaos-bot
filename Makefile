@@ -2,6 +2,7 @@
 	frontend-install frontend-dev frontend-build \
 	tauri-preflight tauri-dev tauri-build-desktop \
 	tauri-android-init tauri-android-dev tauri-android-build tauri-ios-dev \
+	release-check package-linux-x86_64 package-verify upgrade-verify \
 	test test-unit test-integration test-e2e test-all \
 	coverage coverage-report coverage-check
 
@@ -32,6 +33,19 @@ tauri-preflight:
 tauri-build-desktop:
 	npm --prefix frontend-react exec -- tauri build --config src-tauri/tauri.conf.json --debug --no-bundle
 
+release-check:
+	bash scripts/release/validate-version-sync.sh
+	bash scripts/release/generate-release-metadata.sh
+
+package-linux-x86_64:
+	bash scripts/release/package-linux-x86_64.sh
+
+package-verify:
+	bash scripts/release/verify-packaged-runtime.sh
+
+upgrade-verify:
+	bash scripts/release/verify-self-upgrade.sh
+
 tauri-android-init:
 	npm --prefix frontend-react exec -- tauri android init --config src-tauri/tauri.conf.json --ci
 
@@ -47,7 +61,7 @@ tauri-ios-dev:
 test: test-unit test-integration
 
 test-unit:
-	bash scripts/run-test-suite.sh unit cargo test --workspace \
+	bash scripts/run-test-suite.sh unit cargo test --workspace --lib \
 		--test unit_types \
 		--test unit_sessions \
 		--test unit_memory \

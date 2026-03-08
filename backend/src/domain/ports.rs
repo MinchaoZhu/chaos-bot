@@ -1,6 +1,7 @@
 use crate::domain::chat::{ChannelDelivery, ChannelHealth, OutboundChannelMessage};
 use crate::domain::skills::{SkillDetail, SkillMeta};
 use crate::domain::types::{Message, ToolCall, ToolResult, ToolSpec, Usage};
+use crate::domain::upgrade::{UpgradeApplyResult, UpgradeStatus};
 use anyhow::Result;
 use async_trait::async_trait;
 use futures::Stream;
@@ -120,4 +121,10 @@ pub trait SkillPort: Send + Sync {
     async fn get(&self, id: &str) -> Result<SkillDetail>;
     /// Create the skills directory and seed the built-in skill-creator skill.
     async fn ensure_layout(&self) -> Result<()>;
+}
+
+#[async_trait]
+pub trait UpgradePort: Send + Sync {
+    async fn status(&self) -> Result<UpgradeStatus>;
+    async fn apply(&self) -> Result<UpgradeApplyResult>;
 }
