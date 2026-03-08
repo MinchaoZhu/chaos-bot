@@ -1,5 +1,5 @@
 use crate::domain::ports::UpgradePort;
-use crate::domain::upgrade::{UpgradeApplyResult, UpgradeStatus};
+use crate::domain::upgrade::{UpgradeApplyResult, UpgradeRestartResult, UpgradeStatus};
 use crate::domain::AppError;
 use std::sync::Arc;
 
@@ -27,6 +27,14 @@ impl UpgradeService {
             .apply()
             .await
             .map_err(|error| map_internal(error, "apply"))
+    }
+
+    pub async fn relaunch(&self) -> Result<UpgradeRestartResult, AppError> {
+        let runtime = self.require_runtime()?;
+        runtime
+            .relaunch()
+            .await
+            .map_err(|error| map_internal(error, "relaunch"))
     }
 
     fn require_runtime(&self) -> Result<Arc<dyn UpgradePort>, AppError> {

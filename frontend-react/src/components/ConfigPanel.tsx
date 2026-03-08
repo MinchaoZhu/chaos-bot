@@ -3,6 +3,7 @@ import type {
   AgentFileConfig,
   ConfigStateResponse,
   RuntimeError,
+  UpgradeApplyResponse,
   UpgradeStatusResponse,
 } from "../contracts/protocol";
 import type { RuntimeAdapter } from "../runtime/adapter";
@@ -75,7 +76,8 @@ export function ConfigPanel({
   const [searchDraft, setSearchDraft] = useState<SearchDraft>(EMPTY_SEARCH_DRAFT);
   const [status, setStatus] = useState("");
   const [loading, setLoading] = useState(false);
-  const [action, setAction] = useState<"apply" | "reset" | "restart" | "upgrade" | undefined>();
+  const [action, setAction] = useState<"apply" | "reset" | "restart" | "upgrade" | "relaunch" | undefined>();
+  const [lastUpgradeResult, setLastUpgradeResult] = useState<UpgradeApplyResponse>();
 
   const busy = loading || Boolean(action);
 
@@ -145,10 +147,11 @@ export function ConfigPanel({
     setAction("upgrade");
     try {
       const response = await runtime.applyUpgrade(baseUrl);
+      setLastUpgradeResult(response);
       setUpgradeStatus(response.status);
       setStatus(
         response.relaunch_required
-          ? `${response.message}. Restart ${response.launcher_path ?? "~/.local/bin/chaos-bot"} to use ${response.target_version ?? "the new release"}.`
+          ? `Upgrade installed successfully. Restart ${response.launcher_path ?? "~/.local/bin/chaos-bot"} to use ${response.target_version ?? "the new release"}.`
           : response.message,
       );
       onRuntimeError(undefined);
@@ -159,6 +162,24 @@ export function ConfigPanel({
       const runtimeError = asRuntimeError(error);
       onRuntimeError(runtimeError);
       setStatus(`upgrade failed: ${runtimeError.message}`);
+    } finally {
+      setAction(undefined);
+    }
+  }
+
+  async function relaunchUpgrade() {
+    setAction("relaunch");
+    try {
+      const response = await runtime.relaunchUpgrade(baseUrl);
+      setStatus(
+        `Restart requested successfully. chaos-bot is relaunching via ${response.launcher_path ?? "~/.local/bin/chaos-bot"}.`,
+      );
+      onRuntimeError(undefined);
+      onLog(`[upgrade.relaunch] target=${response.target_version ?? "-"}`);
+    } catch (error) {
+      const runtimeError = asRuntimeError(error);
+      onRuntimeError(runtimeError);
+      setStatus(`restart failed: ${runtimeError.message}`);
     } finally {
       setAction(undefined);
     }
@@ -395,6 +416,15 @@ export function ConfigPanel({
               disabled={busy || !upgradeStatus?.supported || !upgradeStatus.upgrade_available}
             >
               {action === "upgrade" ? "Installing..." : "Install Latest Release"}
+            </button>
+            <button
+              type="button"
+              className="ghost-btn"
+              data-testid="upgrade-relaunch-button"
+              onClick={() => void relaunchUpgrade()}
+              disabled={busy || !upgradeStatus?.supported || !lastUpgradeResult?.relaunch_required}
+            >
+              {action === "relaunch" ? "Restarting..." : "Restart Now"}
             </button>
           </div>
         </div>

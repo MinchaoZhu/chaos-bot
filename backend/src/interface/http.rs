@@ -9,7 +9,7 @@ use crate::domain::ports::SkillPort;
 use crate::domain::ports::UpgradePort;
 use crate::domain::skills::{SkillDetail, SkillMeta};
 use crate::domain::types::SessionState;
-use crate::domain::upgrade::{UpgradeApplyResult, UpgradeStatus};
+use crate::domain::upgrade::{UpgradeApplyResult, UpgradeRestartResult, UpgradeStatus};
 use crate::domain::AppError;
 use crate::infrastructure::channels::telegram::TelegramWebhookUpdate;
 use crate::infrastructure::config::AgentFileConfig;
@@ -170,6 +170,7 @@ pub fn router(state: AppState) -> Router {
         .route("/api/skills/:id", get(get_skill))
         .route("/api/upgrade", get(get_upgrade_status))
         .route("/api/upgrade/apply", post(apply_upgrade))
+        .route("/api/upgrade/relaunch", post(relaunch_upgrade))
         .fallback(get(frontend))
         .with_state(state)
 }
@@ -489,6 +490,13 @@ async fn apply_upgrade(
 ) -> Result<Json<UpgradeApplyResult>, AppError> {
     let service = UpgradeService::new(state.upgrades.clone());
     Ok(Json(service.apply().await?))
+}
+
+async fn relaunch_upgrade(
+    State(state): State<AppState>,
+) -> Result<Json<UpgradeRestartResult>, AppError> {
+    let service = UpgradeService::new(state.upgrades.clone());
+    Ok(Json(service.relaunch().await?))
 }
 
 fn chat_event_to_sse(event: ChatEvent) -> Event {
