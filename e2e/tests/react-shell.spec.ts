@@ -48,6 +48,8 @@ async function assertConfigTabFlow(page: Page, mode: "desktop" | "mobile") {
   await expect(page.getByRole("heading", { name: "Runtime Config" })).toBeVisible();
   await expect(page.getByTestId("config-raw-editor")).toContainText('"llm"');
   await expect(page.getByTestId("search-provider-select")).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Web Upgrade" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Refresh Upgrade" })).toBeVisible();
 
   await page.getByRole("button", { name: "Apply Config" }).click();
   await expect(page.locator(".config-status")).toContainText("apply ok");

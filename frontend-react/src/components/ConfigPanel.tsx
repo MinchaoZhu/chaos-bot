@@ -146,7 +146,11 @@ export function ConfigPanel({
     try {
       const response = await runtime.applyUpgrade(baseUrl);
       setUpgradeStatus(response.status);
-      setStatus(response.message);
+      setStatus(
+        response.relaunch_required
+          ? `${response.message}. Restart ${response.launcher_path ?? "~/.local/bin/chaos-bot"} to use ${response.target_version ?? "the new release"}.`
+          : response.message,
+      );
       onRuntimeError(undefined);
       onLog(
         `[upgrade.apply] action=${response.action} current=${response.current_version ?? "-"} target=${response.target_version ?? "-"}`,
@@ -240,6 +244,22 @@ export function ConfigPanel({
       setAction(undefined);
     }
   }
+
+  const upgradeHeadline = !upgradeStatus
+    ? "Checking installed release..."
+    : !upgradeStatus.supported
+      ? "Web UI upgrade is unavailable in this runtime"
+      : upgradeStatus.upgrade_available
+        ? `Upgrade ready: ${upgradeStatus.current_version ?? "unknown"} -> ${upgradeStatus.latest_version ?? "unknown"}`
+        : `You are already on ${upgradeStatus.current_version ?? "the latest release"}`;
+
+  const upgradeBody = !upgradeStatus
+    ? "Load runtime config to inspect the installed release and GitHub release status."
+    : !upgradeStatus.supported
+      ? upgradeStatus.reason ?? "Self-upgrade only works when chaos-bot is started from an installed release bundle."
+      : upgradeStatus.upgrade_available
+        ? `The Web UI can download and install ${upgradeStatus.latest_version ?? "the latest release"} now. A launcher restart is still required after install.`
+        : upgradeStatus.reason ?? "No newer GitHub release is available for this installed bundle.";
 
   return (
     <section className={`panel config-panel ${compact ? "compact" : ""}`}>
@@ -338,42 +358,57 @@ export function ConfigPanel({
 
       <section className="config-structured-section">
         <div className="panel-head">
-          <h3>Self Upgrade</h3>
+          <h3>Web Upgrade</h3>
           <button type="button" className="ghost-btn" onClick={() => void refreshUpgradeStatus()} disabled={busy}>
-            Refresh Upgrade Status
+            Refresh Upgrade
           </button>
+        </div>
+
+        <div className={`upgrade-card ${upgradeStatus?.upgrade_available ? "available" : ""}`}>
+          <div className="upgrade-copy">
+            <p className="upgrade-eyebrow">GitHub release installer</p>
+            <h4>{upgradeHeadline}</h4>
+            <p className="upgrade-body">{upgradeBody}</p>
+          </div>
+
+          <div className="config-meta">
+            <p>
+              installed <strong>{upgradeStatus?.current_version ?? "-"}</strong>
+            </p>
+            <p>
+              latest <strong>{upgradeStatus?.latest_version ?? "-"}</strong>
+            </p>
+            <p>
+              available <strong>{upgradeStatus?.upgrade_available ? "yes" : "no"}</strong>
+            </p>
+          </div>
+
+          {upgradeStatus?.repository ? <p className="upgrade-detail">repository: {upgradeStatus.repository}</p> : null}
+          {upgradeStatus?.install_prefix ? <p className="upgrade-detail">prefix: {upgradeStatus.install_prefix}</p> : null}
+          {upgradeStatus?.download_url ? <p className="upgrade-detail">bundle: {upgradeStatus.download_url}</p> : null}
+
+          <div className="config-actions">
+            <button
+              type="button"
+              data-testid="upgrade-apply-button"
+              onClick={() => void applyUpgrade()}
+              disabled={busy || !upgradeStatus?.supported || !upgradeStatus.upgrade_available}
+            >
+              {action === "upgrade" ? "Installing..." : "Install Latest Release"}
+            </button>
+          </div>
         </div>
 
         <div className="config-meta">
           <p>
-            installed <strong>{upgradeStatus?.current_version ?? "-"}</strong>
+            install type <strong>{upgradeStatus?.supported ? "bundle" : "dev/runtime"}</strong>
           </p>
           <p>
-            latest <strong>{upgradeStatus?.latest_version ?? "-"}</strong>
+            relaunch <strong>required after install</strong>
           </p>
           <p>
-            available <strong>{upgradeStatus?.upgrade_available ? "yes" : "no"}</strong>
+            action <strong>web ui</strong>
           </p>
-        </div>
-
-        <p className="config-status">
-          {upgradeStatus?.supported
-            ? upgradeStatus.reason ?? "Installed release bundles can download and install newer GitHub releases. Relaunch is required after a successful upgrade."
-            : upgradeStatus?.reason ?? "Self-upgrade is only available from an installed release bundle."}
-        </p>
-
-        {upgradeStatus?.repository ? <p>repository: {upgradeStatus.repository}</p> : null}
-        {upgradeStatus?.install_prefix ? <p>prefix: {upgradeStatus.install_prefix}</p> : null}
-
-        <div className="config-actions">
-          <button
-            type="button"
-            data-testid="upgrade-apply-button"
-            onClick={() => void applyUpgrade()}
-            disabled={busy || !upgradeStatus?.supported || !upgradeStatus.upgrade_available}
-          >
-            Install Latest Release
-          </button>
         </div>
       </section>
 

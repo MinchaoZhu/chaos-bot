@@ -2,7 +2,7 @@
 	frontend-install frontend-dev frontend-build \
 	tauri-preflight tauri-dev tauri-build-desktop \
 	tauri-android-init tauri-android-dev tauri-android-build tauri-ios-dev \
-	release-check package-linux-x86_64 package-verify upgrade-verify \
+	release-check package-linux-x86_64 package-verify upgrade-verify install-verify \
 	test test-unit test-integration test-e2e test-all \
 	coverage coverage-report coverage-check
 
@@ -45,6 +45,9 @@ package-verify:
 
 upgrade-verify:
 	bash scripts/release/verify-self-upgrade.sh
+
+install-verify:
+	bash scripts/release/verify-github-installer.sh
 
 tauri-android-init:
 	npm --prefix frontend-react exec -- tauri android init --config src-tauri/tauri.conf.json --ci

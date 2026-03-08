@@ -17,8 +17,7 @@ fi
 
 git_short_sha="$(git -C "${ROOT_DIR}" rev-parse --short HEAD)"
 commit_count="$(git -C "${ROOT_DIR}" rev-list --count HEAD)"
-channel="${RELEASE_CHANNEL:-master}"
-release_version="${base_version}-${channel}.${commit_count}"
+release_version="${base_version}"
 tag_name="v${release_version}"
 artifact_stem="${release_version}"
 

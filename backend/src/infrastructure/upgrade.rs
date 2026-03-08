@@ -555,7 +555,7 @@ mod tests {
         let temp = tempdir().expect("tempdir");
         let bundle_root = temp
             .path()
-            .join(format!("chaos-bot-{version}-linux-x86_64"));
+            .join(format!("{version}-linux-x86_64"));
         fs::create_dir_all(bundle_root.join("bin")).expect("create bin");
 
         fs::write(
@@ -605,7 +605,7 @@ chmod +x "${{PREFIX}}/bin/chaos-bot"
         let encoder = flate2::write::GzEncoder::new(tar_file, flate2::Compression::default());
         let mut builder = tar::Builder::new(encoder);
         builder
-            .append_dir_all(format!("chaos-bot-{version}-linux-x86_64"), &bundle_root)
+            .append_dir_all(format!("{version}-linux-x86_64"), &bundle_root)
             .expect("append bundle dir");
         let encoder = builder.into_inner().expect("finish tar");
         encoder.finish().expect("finish gzip");
@@ -700,50 +700,50 @@ chmod +x "${{PREFIX}}/bin/chaos-bot"
     async fn status_reports_upgrade_availability() {
         clear_upgrade_env();
         let temp = tempdir().expect("tempdir");
-        let bundle = build_bundle("0.1.0-master.2");
+        let bundle = build_bundle("0.1.1");
         let metadata = json!({
-            "release_version": "0.1.0-master.2",
-            "tag_name": "v0.1.0-master.2",
-            "artifact_stem": "chaos-bot-0.1.0-master.2"
+            "release_version": "0.1.1",
+            "tag_name": "v0.1.1",
+            "artifact_stem": "0.1.1"
         });
         let metadata_bytes = serde_json::to_vec(&metadata).expect("metadata bytes");
-        let manifest_bytes = json!({ "release_version": "0.1.0-master.2" })
+        let manifest_bytes = json!({ "release_version": "0.1.1" })
             .to_string()
             .into_bytes();
 
         let (base_url, _server) = serve_assets(
             json!({
-                "tag_name": "v0.1.0-master.2",
+                "tag_name": "v0.1.1",
                 "assets": [
                     { "name": "release-metadata.json", "browser_download_url": "BASE/assets/release-metadata.json" },
                     { "name": "release-metadata.sha256", "browser_download_url": "BASE/assets/release-metadata.sha256" },
-                    { "name": "chaos-bot-0.1.0-master.2-linux-x86_64.tar.gz", "browser_download_url": "BASE/assets/chaos-bot-0.1.0-master.2-linux-x86_64.tar.gz" },
-                    { "name": "chaos-bot-0.1.0-master.2-linux-x86_64.tar.gz.sha256", "browser_download_url": "BASE/assets/chaos-bot-0.1.0-master.2-linux-x86_64.tar.gz.sha256" },
-                    { "name": "chaos-bot-0.1.0-master.2-linux-x86_64.manifest.json", "browser_download_url": "BASE/assets/chaos-bot-0.1.0-master.2-linux-x86_64.manifest.json" }
+                    { "name": "0.1.1-linux-x86_64.tar.gz", "browser_download_url": "BASE/assets/0.1.1-linux-x86_64.tar.gz" },
+                    { "name": "0.1.1-linux-x86_64.tar.gz.sha256", "browser_download_url": "BASE/assets/0.1.1-linux-x86_64.tar.gz.sha256" },
+                    { "name": "0.1.1-linux-x86_64.manifest.json", "browser_download_url": "BASE/assets/0.1.1-linux-x86_64.manifest.json" }
                 ]
             }),
             HashMap::from([
                 ("release-metadata.json".to_string(), metadata_bytes.clone()),
                 ("release-metadata.sha256".to_string(), checksum_for(&metadata_bytes, "release-metadata.json")),
-                ("chaos-bot-0.1.0-master.2-linux-x86_64.tar.gz".to_string(), bundle.clone()),
+                ("0.1.1-linux-x86_64.tar.gz".to_string(), bundle.clone()),
                 (
-                    "chaos-bot-0.1.0-master.2-linux-x86_64.tar.gz.sha256".to_string(),
-                    checksum_for(&bundle, "chaos-bot-0.1.0-master.2-linux-x86_64.tar.gz"),
+                    "0.1.1-linux-x86_64.tar.gz.sha256".to_string(),
+                    checksum_for(&bundle, "0.1.1-linux-x86_64.tar.gz"),
                 ),
-                ("chaos-bot-0.1.0-master.2-linux-x86_64.manifest.json".to_string(), manifest_bytes),
+                ("0.1.1-linux-x86_64.manifest.json".to_string(), manifest_bytes),
             ]),
         )
         .await;
 
         let latest_url = format!("{base_url}/repos/test/chaos-bot/releases/latest");
-        let _envs = setup_installed_release(&temp, "0.1.0-master.1", &latest_url);
+        let _envs = setup_installed_release(&temp, "0.1.0", &latest_url);
 
         let updater = GitHubReleaseUpdater::new().expect("updater");
         let status = updater.status().await.expect("status");
         assert!(status.supported);
         assert!(status.upgrade_available);
-        assert_eq!(status.current_version.as_deref(), Some("0.1.0-master.1"));
-        assert_eq!(status.latest_version.as_deref(), Some("0.1.0-master.2"));
+        assert_eq!(status.current_version.as_deref(), Some("0.1.0"));
+        assert_eq!(status.latest_version.as_deref(), Some("0.1.1"));
     }
 
     #[tokio::test]
@@ -751,43 +751,43 @@ chmod +x "${{PREFIX}}/bin/chaos-bot"
     async fn apply_noops_when_versions_match() {
         clear_upgrade_env();
         let temp = tempdir().expect("tempdir");
-        let bundle = build_bundle("0.1.0-master.2");
+        let bundle = build_bundle("0.1.1");
         let metadata = json!({
-            "release_version": "0.1.0-master.2",
-            "tag_name": "v0.1.0-master.2",
-            "artifact_stem": "chaos-bot-0.1.0-master.2"
+            "release_version": "0.1.1",
+            "tag_name": "v0.1.1",
+            "artifact_stem": "0.1.1"
         });
         let metadata_bytes = serde_json::to_vec(&metadata).expect("metadata bytes");
-        let manifest_bytes = json!({ "release_version": "0.1.0-master.2" })
+        let manifest_bytes = json!({ "release_version": "0.1.1" })
             .to_string()
             .into_bytes();
 
         let (base_url, _server) = serve_assets(
             json!({
-                "tag_name": "v0.1.0-master.2",
+                "tag_name": "v0.1.1",
                 "assets": [
                     { "name": "release-metadata.json", "browser_download_url": "BASE/assets/release-metadata.json" },
                     { "name": "release-metadata.sha256", "browser_download_url": "BASE/assets/release-metadata.sha256" },
-                    { "name": "chaos-bot-0.1.0-master.2-linux-x86_64.tar.gz", "browser_download_url": "BASE/assets/chaos-bot-0.1.0-master.2-linux-x86_64.tar.gz" },
-                    { "name": "chaos-bot-0.1.0-master.2-linux-x86_64.tar.gz.sha256", "browser_download_url": "BASE/assets/chaos-bot-0.1.0-master.2-linux-x86_64.tar.gz.sha256" },
-                    { "name": "chaos-bot-0.1.0-master.2-linux-x86_64.manifest.json", "browser_download_url": "BASE/assets/chaos-bot-0.1.0-master.2-linux-x86_64.manifest.json" }
+                    { "name": "0.1.1-linux-x86_64.tar.gz", "browser_download_url": "BASE/assets/0.1.1-linux-x86_64.tar.gz" },
+                    { "name": "0.1.1-linux-x86_64.tar.gz.sha256", "browser_download_url": "BASE/assets/0.1.1-linux-x86_64.tar.gz.sha256" },
+                    { "name": "0.1.1-linux-x86_64.manifest.json", "browser_download_url": "BASE/assets/0.1.1-linux-x86_64.manifest.json" }
                 ]
             }),
             HashMap::from([
                 ("release-metadata.json".to_string(), metadata_bytes.clone()),
                 ("release-metadata.sha256".to_string(), checksum_for(&metadata_bytes, "release-metadata.json")),
-                ("chaos-bot-0.1.0-master.2-linux-x86_64.tar.gz".to_string(), bundle.clone()),
+                ("0.1.1-linux-x86_64.tar.gz".to_string(), bundle.clone()),
                 (
-                    "chaos-bot-0.1.0-master.2-linux-x86_64.tar.gz.sha256".to_string(),
-                    checksum_for(&bundle, "chaos-bot-0.1.0-master.2-linux-x86_64.tar.gz"),
+                    "0.1.1-linux-x86_64.tar.gz.sha256".to_string(),
+                    checksum_for(&bundle, "0.1.1-linux-x86_64.tar.gz"),
                 ),
-                ("chaos-bot-0.1.0-master.2-linux-x86_64.manifest.json".to_string(), manifest_bytes),
+                ("0.1.1-linux-x86_64.manifest.json".to_string(), manifest_bytes),
             ]),
         )
         .await;
 
         let latest_url = format!("{base_url}/repos/test/chaos-bot/releases/latest");
-        let _envs = setup_installed_release(&temp, "0.1.0-master.2", &latest_url);
+        let _envs = setup_installed_release(&temp, "0.1.1", &latest_url);
 
         let updater = GitHubReleaseUpdater::new().expect("updater");
         let result = updater.apply().await.expect("apply");
@@ -800,43 +800,43 @@ chmod +x "${{PREFIX}}/bin/chaos-bot"
     async fn apply_installs_new_release() {
         clear_upgrade_env();
         let temp = tempdir().expect("tempdir");
-        let bundle = build_bundle("0.1.0-master.3");
+        let bundle = build_bundle("0.1.2");
         let metadata = json!({
-            "release_version": "0.1.0-master.3",
-            "tag_name": "v0.1.0-master.3",
-            "artifact_stem": "chaos-bot-0.1.0-master.3"
+            "release_version": "0.1.2",
+            "tag_name": "v0.1.2",
+            "artifact_stem": "0.1.2"
         });
         let metadata_bytes = serde_json::to_vec(&metadata).expect("metadata bytes");
-        let manifest_bytes = json!({ "release_version": "0.1.0-master.3" })
+        let manifest_bytes = json!({ "release_version": "0.1.2" })
             .to_string()
             .into_bytes();
 
         let (base_url, _server) = serve_assets(
             json!({
-                "tag_name": "v0.1.0-master.3",
+                "tag_name": "v0.1.2",
                 "assets": [
                     { "name": "release-metadata.json", "browser_download_url": "BASE/assets/release-metadata.json" },
                     { "name": "release-metadata.sha256", "browser_download_url": "BASE/assets/release-metadata.sha256" },
-                    { "name": "chaos-bot-0.1.0-master.3-linux-x86_64.tar.gz", "browser_download_url": "BASE/assets/chaos-bot-0.1.0-master.3-linux-x86_64.tar.gz" },
-                    { "name": "chaos-bot-0.1.0-master.3-linux-x86_64.tar.gz.sha256", "browser_download_url": "BASE/assets/chaos-bot-0.1.0-master.3-linux-x86_64.tar.gz.sha256" },
-                    { "name": "chaos-bot-0.1.0-master.3-linux-x86_64.manifest.json", "browser_download_url": "BASE/assets/chaos-bot-0.1.0-master.3-linux-x86_64.manifest.json" }
+                    { "name": "0.1.2-linux-x86_64.tar.gz", "browser_download_url": "BASE/assets/0.1.2-linux-x86_64.tar.gz" },
+                    { "name": "0.1.2-linux-x86_64.tar.gz.sha256", "browser_download_url": "BASE/assets/0.1.2-linux-x86_64.tar.gz.sha256" },
+                    { "name": "0.1.2-linux-x86_64.manifest.json", "browser_download_url": "BASE/assets/0.1.2-linux-x86_64.manifest.json" }
                 ]
             }),
             HashMap::from([
                 ("release-metadata.json".to_string(), metadata_bytes.clone()),
                 ("release-metadata.sha256".to_string(), checksum_for(&metadata_bytes, "release-metadata.json")),
-                ("chaos-bot-0.1.0-master.3-linux-x86_64.tar.gz".to_string(), bundle.clone()),
+                ("0.1.2-linux-x86_64.tar.gz".to_string(), bundle.clone()),
                 (
-                    "chaos-bot-0.1.0-master.3-linux-x86_64.tar.gz.sha256".to_string(),
-                    checksum_for(&bundle, "chaos-bot-0.1.0-master.3-linux-x86_64.tar.gz"),
+                    "0.1.2-linux-x86_64.tar.gz.sha256".to_string(),
+                    checksum_for(&bundle, "0.1.2-linux-x86_64.tar.gz"),
                 ),
-                ("chaos-bot-0.1.0-master.3-linux-x86_64.manifest.json".to_string(), manifest_bytes),
+                ("0.1.2-linux-x86_64.manifest.json".to_string(), manifest_bytes),
             ]),
         )
         .await;
 
         let latest_url = format!("{base_url}/repos/test/chaos-bot/releases/latest");
-        let _envs = setup_installed_release(&temp, "0.1.0-master.2", &latest_url);
+        let _envs = setup_installed_release(&temp, "0.1.1", &latest_url);
 
         let updater = GitHubReleaseUpdater::new().expect("updater");
         let result = updater.apply().await.expect("apply");
@@ -847,7 +847,7 @@ chmod +x "${{PREFIX}}/bin/chaos-bot"
         let launcher = install_prefix.join("bin/chaos-bot");
         assert!(launcher.exists());
         let release_manifest =
-            install_prefix.join("share/chaos-bot/releases/0.1.0-master.3/release-manifest.json");
+            install_prefix.join("share/chaos-bot/releases/0.1.2/release-manifest.json");
         assert!(release_manifest.exists());
     }
 
@@ -856,37 +856,37 @@ chmod +x "${{PREFIX}}/bin/chaos-bot"
     async fn status_reports_checksum_failure_reason() {
         clear_upgrade_env();
         let temp = tempdir().expect("tempdir");
-        let bundle = build_bundle("0.1.0-master.4");
+        let bundle = build_bundle("0.1.3");
         let metadata = json!({
-            "release_version": "0.1.0-master.4",
-            "tag_name": "v0.1.0-master.4",
-            "artifact_stem": "chaos-bot-0.1.0-master.4"
+            "release_version": "0.1.3",
+            "tag_name": "v0.1.3",
+            "artifact_stem": "0.1.3"
         });
         let metadata_bytes = serde_json::to_vec(&metadata).expect("metadata bytes");
 
         let (base_url, _server) = serve_assets(
             json!({
-                "tag_name": "v0.1.0-master.4",
+                "tag_name": "v0.1.3",
                 "assets": [
                     { "name": "release-metadata.json", "browser_download_url": "BASE/assets/release-metadata.json" },
                     { "name": "release-metadata.sha256", "browser_download_url": "BASE/assets/release-metadata.sha256" },
-                    { "name": "chaos-bot-0.1.0-master.4-linux-x86_64.tar.gz", "browser_download_url": "BASE/assets/chaos-bot-0.1.0-master.4-linux-x86_64.tar.gz" },
-                    { "name": "chaos-bot-0.1.0-master.4-linux-x86_64.tar.gz.sha256", "browser_download_url": "BASE/assets/chaos-bot-0.1.0-master.4-linux-x86_64.tar.gz.sha256" },
-                    { "name": "chaos-bot-0.1.0-master.4-linux-x86_64.manifest.json", "browser_download_url": "BASE/assets/chaos-bot-0.1.0-master.4-linux-x86_64.manifest.json" }
+                    { "name": "0.1.3-linux-x86_64.tar.gz", "browser_download_url": "BASE/assets/0.1.3-linux-x86_64.tar.gz" },
+                    { "name": "0.1.3-linux-x86_64.tar.gz.sha256", "browser_download_url": "BASE/assets/0.1.3-linux-x86_64.tar.gz.sha256" },
+                    { "name": "0.1.3-linux-x86_64.manifest.json", "browser_download_url": "BASE/assets/0.1.3-linux-x86_64.manifest.json" }
                 ]
             }),
             HashMap::from([
                 ("release-metadata.json".to_string(), metadata_bytes.clone()),
                 ("release-metadata.sha256".to_string(), b"deadbeef  release-metadata.json\n".to_vec()),
-                ("chaos-bot-0.1.0-master.4-linux-x86_64.tar.gz".to_string(), bundle),
-                ("chaos-bot-0.1.0-master.4-linux-x86_64.tar.gz.sha256".to_string(), b"deadbeef  bundle.tar.gz\n".to_vec()),
-                ("chaos-bot-0.1.0-master.4-linux-x86_64.manifest.json".to_string(), br#"{"release_version":"0.1.0-master.4"}"#.to_vec()),
+                ("0.1.3-linux-x86_64.tar.gz".to_string(), bundle),
+                ("0.1.3-linux-x86_64.tar.gz.sha256".to_string(), b"deadbeef  bundle.tar.gz\n".to_vec()),
+                ("0.1.3-linux-x86_64.manifest.json".to_string(), br#"{"release_version":"0.1.3"}"#.to_vec()),
             ]),
         )
         .await;
 
         let latest_url = format!("{base_url}/repos/test/chaos-bot/releases/latest");
-        let _envs = setup_installed_release(&temp, "0.1.0-master.3", &latest_url);
+        let _envs = setup_installed_release(&temp, "0.1.2", &latest_url);
 
         let updater = GitHubReleaseUpdater::new().expect("updater");
         let status = updater.status().await.expect("status");

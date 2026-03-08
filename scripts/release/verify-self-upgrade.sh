@@ -39,10 +39,11 @@ if [[ -z "${bundle_path}" || -z "${bundle_root}" || -z "${release_version}" ]]; 
   exit 1
 fi
 
-next_release_version="$(printf '%s' "${release_version}" | sed 's/\.[0-9][0-9]*$/.99999/')"
-if [[ "${next_release_version}" = "${release_version}" ]]; then
-  next_release_version="${release_version}.99999"
+if [[ ! "${release_version}" =~ ^([0-9]+)\.([0-9]+)\.([0-9]+)$ ]]; then
+  echo "expected semver release version, got ${release_version}" >&2
+  exit 1
 fi
+next_release_version="${BASH_REMATCH[1]}.${BASH_REMATCH[2]}.$((BASH_REMATCH[3] + 1))"
 next_artifact_stem="${next_release_version}"
 next_bundle_root="${next_artifact_stem}-linux-x86_64"
 
