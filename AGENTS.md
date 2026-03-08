@@ -30,6 +30,14 @@
 - 密钥优先级保持为 `defaults < env secrets < config.json secrets`，其中 `GEMINI_API_KEY` 先从环境变量读取，再由 `config.json` 覆盖。
 - 新增单测 `build_provider_gemini_with_key`，并完成格式化与回归：`cargo fmt`、`cargo test -p chaos-bot-backend --test unit_llm --test unit_config`（通过）。
 
+## Commit Constraints
+- 仓库启用 `core.hooksPath=.githooks`，推送前会执行 `.githooks/pre-push`。
+- 所有待推送提交标题必须符合：
+  - `Feature: <summary>`
+  - `Fix: <summary>`
+  - `Refactor: <summary>`
+- 不符合格式会被 hook 拒绝推送。
+
 ## PM File Map
 - `.pm/docs/project.md`: 当前项目上下文文档（历史记录仍保留 `cicd` 轨迹）。
 - `.pm/docs/AGENTS.md`: Runtime 状态镜像。
