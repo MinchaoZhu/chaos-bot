@@ -12,6 +12,7 @@
     "max_iterations": 6,
     "token_budget": 12000
   },
+  "search": {},
   "channels": {
     "telegram": {
       "enabled": false,

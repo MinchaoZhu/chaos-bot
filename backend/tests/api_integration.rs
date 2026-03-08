@@ -229,6 +229,41 @@ async fn chat_sse_with_tool_calls() {
     assert!(text.contains("mock_tool"));
 }
 
+#[tokio::test]
+async fn chat_sse_web_search_reports_missing_provider_error() {
+    let tool_call = ToolCall {
+        id: "tc_web_search".to_string(),
+        name: "web_search".to_string(),
+        arguments: json!({"queryString": "rust async testing"}),
+    };
+    let provider = MockStreamProvider::tool_then_text(tool_call, "After web search error");
+
+    let mut registry = chaos_bot_backend::infrastructure::tooling::ToolRegistry::new();
+    registry.register_default_tools();
+
+    let (_temp, state) = build_test_state_with_registry(Arc::new(provider), registry);
+    let app = router(state);
+
+    let res = app
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/api/chat")
+                .header("content-type", "application/json")
+                .body(Body::from(json!({"message": "search the web"}).to_string()))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(res.status(), StatusCode::OK);
+    let body = to_bytes(res.into_body(), usize::MAX).await.unwrap();
+    let text = String::from_utf8_lossy(&body);
+    assert!(text.contains("event: tool_call"));
+    assert!(text.contains("\"web_search\""));
+    assert!(text.contains("tool error: no provider configured"));
+}
+
 // -------------------------------------------------------------------------
 // Chat with existing session (conversation accumulates)
 // -------------------------------------------------------------------------
@@ -422,6 +457,9 @@ async fn config_api_apply_reset_restart_lifecycle() {
     let mut state_json: Value = serde_json::from_slice(&body).unwrap();
 
     state_json["running"]["llm"]["model"] = Value::String("mock-next".to_string());
+    state_json["running"]["search"]["provider"] = Value::String("brave".to_string());
+    state_json["running"]["secrets"]["brave_search_api_key"] =
+        Value::String("brave-key-next".to_string());
 
     let apply_res = app
         .clone()
@@ -441,6 +479,11 @@ async fn config_api_apply_reset_restart_lifecycle() {
     let body = to_bytes(apply_res.into_body(), usize::MAX).await.unwrap();
     let apply_json: Value = serde_json::from_slice(&body).unwrap();
     assert_eq!(apply_json["state"]["running"]["llm"]["model"], "mock-next");
+    assert_eq!(apply_json["state"]["running"]["search"]["provider"], "brave");
+    assert_eq!(
+        apply_json["state"]["running"]["secrets"]["brave_search_api_key"],
+        "brave-key-next"
+    );
 
     let backup1 = apply_json["state"]["backup1_path"].as_str().unwrap();
     assert!(std::path::Path::new(backup1).exists());

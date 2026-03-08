@@ -1,5 +1,5 @@
 use chaos_bot_backend::infrastructure::config::{
-    AgentChannelsConfig, AgentFileConfig, AgentLlmConfig, AgentLoggingConfig,
+    AgentChannelsConfig, AgentFileConfig, AgentLlmConfig, AgentLoggingConfig, AgentSearchConfig,
     AgentSecretsConfig, AgentServerConfig, AppConfig, EnvSecrets,
 };
 use chaos_bot_backend::domain::audit::{redact_json, redact_raw_json};
@@ -47,6 +47,7 @@ fn init_logging_writes_to_workspace_log_file() {
             },
             server: AgentServerConfig::default(),
             llm: AgentLlmConfig::default(),
+            search: AgentSearchConfig::default(),
             channels: AgentChannelsConfig::default(),
             secrets: AgentSecretsConfig::default(),
         },

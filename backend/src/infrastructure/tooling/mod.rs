@@ -1,5 +1,9 @@
+mod search;
+
+use crate::infrastructure::config::AppConfig;
 use crate::domain::ports::{ToolExecutionContext, ToolExecutorPort};
 use crate::domain::types::{ToolExecution, ToolResult, ToolSpec};
+pub use search::WebSearchTool;
 use anyhow::{anyhow, Context, Result};
 use async_trait::async_trait;
 use serde_json::{json, Value};
@@ -56,10 +60,19 @@ impl ToolRegistry {
         self.register(MemorySearchTool);
     }
 
+    pub fn register_search_tools(&mut self, config: &AppConfig) {
+        self.register(WebSearchTool::new(config));
+    }
+
     pub fn register_default_tools(&mut self) {
+        self.register_default_tools_with_config(&AppConfig::default());
+    }
+
+    pub fn register_default_tools_with_config(&mut self, config: &AppConfig) {
         self.register_coding_tools();
         self.register_read_only_tools();
         self.register_memory_tools();
+        self.register_search_tools(config);
     }
 
     pub fn specs(&self) -> Vec<ToolSpec> {

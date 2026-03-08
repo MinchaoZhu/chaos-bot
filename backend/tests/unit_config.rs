@@ -1,7 +1,7 @@
 use chaos_bot_backend::infrastructure::config::{
     default_config_path_for_workspace, default_workspace_path, AgentChannelsConfig,
-    AgentFileConfig, AgentLlmConfig, AgentLoggingConfig, AgentSecretsConfig, AgentServerConfig,
-    AgentTelegramConfig, AppConfig, EnvSecrets,
+    AgentFileConfig, AgentLlmConfig, AgentLoggingConfig, AgentSearchConfig, AgentSecretsConfig,
+    AgentServerConfig, AgentTelegramConfig, AppConfig, EnvSecrets,
 };
 use serial_test::serial;
 use std::path::{Path, PathBuf};
@@ -324,11 +324,17 @@ fn from_inputs_supports_injected_config_source() {
             max_iterations: Some(2),
             token_budget: Some(4096),
         },
+        search: AgentSearchConfig {
+            provider: Some("brave".to_string()),
+        },
         channels: AgentChannelsConfig::default(),
         secrets: AgentSecretsConfig {
             openai_api_key: Some("json-key".to_string()),
             anthropic_api_key: None,
             gemini_api_key: None,
+            perplexity_api_key: None,
+            tavily_api_key: None,
+            brave_search_api_key: Some("brave-json".to_string()),
             telegram_bot_token: Some("telegram-json".to_string()),
         },
     };
@@ -345,7 +351,9 @@ fn from_inputs_supports_injected_config_source() {
     assert_eq!(config.port, 4444);
     assert_eq!(config.provider, "mock");
     assert_eq!(config.model, "m");
+    assert_eq!(config.search_provider.as_deref(), Some("brave"));
     assert_eq!(config.openai_api_key.as_deref(), Some("json-key"));
+    assert_eq!(config.brave_search_api_key.as_deref(), Some("brave-json"));
     assert_eq!(config.telegram_bot_token.as_deref(), Some("telegram-json"));
     assert_eq!(config.workspace, home.join("wd"));
     assert_eq!(config.log_level, "debug");
@@ -366,6 +374,7 @@ fn from_inputs_applies_telegram_channel_and_secret_settings() {
         logging: AgentLoggingConfig::default(),
         server: AgentServerConfig::default(),
         llm: AgentLlmConfig::default(),
+        search: AgentSearchConfig::default(),
         channels: AgentChannelsConfig {
             telegram: AgentTelegramConfig {
                 enabled: Some(true),
@@ -379,6 +388,9 @@ fn from_inputs_applies_telegram_channel_and_secret_settings() {
             openai_api_key: None,
             anthropic_api_key: None,
             gemini_api_key: None,
+            perplexity_api_key: None,
+            tavily_api_key: None,
+            brave_search_api_key: None,
             telegram_bot_token: Some("bot-token-json".to_string()),
         },
     };
@@ -402,4 +414,36 @@ fn from_inputs_applies_telegram_channel_and_secret_settings() {
         "https://telegram.example".to_string()
     );
     assert_eq!(config.telegram_bot_token.as_deref(), Some("bot-token-json"));
+}
+
+#[test]
+#[serial]
+fn from_inputs_applies_search_provider_and_secret_settings() {
+    let home = std::path::PathBuf::from("/tmp/home-base-search");
+    let file_config = AgentFileConfig {
+        workspace: None,
+        logging: AgentLoggingConfig::default(),
+        server: AgentServerConfig::default(),
+        llm: AgentLlmConfig::default(),
+        search: AgentSearchConfig {
+            provider: Some("Perplexity".to_string()),
+        },
+        channels: AgentChannelsConfig::default(),
+        secrets: AgentSecretsConfig {
+            openai_api_key: None,
+            anthropic_api_key: None,
+            gemini_api_key: None,
+            perplexity_api_key: Some("pplx-json".to_string()),
+            tavily_api_key: Some("tvly-json".to_string()),
+            brave_search_api_key: Some("brave-json".to_string()),
+            telegram_bot_token: None,
+        },
+    };
+
+    let config = AppConfig::from_inputs(file_config, EnvSecrets::default(), home);
+
+    assert_eq!(config.search_provider.as_deref(), Some("perplexity"));
+    assert_eq!(config.perplexity_api_key.as_deref(), Some("pplx-json"));
+    assert_eq!(config.tavily_api_key.as_deref(), Some("tvly-json"));
+    assert_eq!(config.brave_search_api_key.as_deref(), Some("brave-json"));
 }
