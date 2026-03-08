@@ -1,5 +1,5 @@
-use chaos_bot_backend::infrastructure::session_store::SessionStore;
 use chaos_bot_backend::domain::types::Message;
+use chaos_bot_backend::infrastructure::session_store::SessionStore;
 
 #[tokio::test]
 async fn create_returns_unique_session() {

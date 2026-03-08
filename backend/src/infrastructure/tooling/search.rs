@@ -1,6 +1,6 @@
 use super::{Tool, ToolContext};
-use crate::infrastructure::config::AppConfig;
 use crate::domain::types::ToolExecution;
+use crate::infrastructure::config::AppConfig;
 use anyhow::{anyhow, Context, Result};
 use async_trait::async_trait;
 use reqwest::Client;
@@ -124,7 +124,11 @@ impl Default for SearchEndpoints {
 
 impl WebSearchTool {
     pub fn new(config: &AppConfig) -> Self {
-        Self::with_parts(Client::new(), SearchToolConfig::from_app_config(config), SearchEndpoints::default())
+        Self::with_parts(
+            Client::new(),
+            SearchToolConfig::from_app_config(config),
+            SearchEndpoints::default(),
+        )
     }
 
     fn with_parts(client: Client, config: SearchToolConfig, endpoints: SearchEndpoints) -> Self {
@@ -426,8 +430,8 @@ impl Tool for WebSearchTool {
     }
 
     async fn execute(&self, args: Value, _context: &ToolContext) -> Result<ToolExecution> {
-        let parsed: WebSearchArgs = serde_json::from_value(args)
-            .context("web_search.queryString is required")?;
+        let parsed: WebSearchArgs =
+            serde_json::from_value(args).context("web_search.queryString is required")?;
         let query = parsed.query_string.trim();
         if query.is_empty() {
             return Err(anyhow!("web_search.queryString is required"));
@@ -467,7 +471,13 @@ fn truncate_error_body(body: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use axum::{extract::Query, http::StatusCode, response::IntoResponse, routing::{get, post}, Json, Router};
+    use axum::{
+        extract::Query,
+        http::StatusCode,
+        response::IntoResponse,
+        routing::{get, post},
+        Json, Router,
+    };
     use serde::Deserialize;
     use std::sync::Arc;
     use tempfile::tempdir;
@@ -491,7 +501,10 @@ mod tests {
 
     async fn spawn_test_server() -> (String, tokio::task::JoinHandle<()>) {
         async fn perplexity_handler(Json(payload): Json<Value>) -> impl IntoResponse {
-            let query = payload.get("query").and_then(Value::as_str).unwrap_or_default();
+            let query = payload
+                .get("query")
+                .and_then(Value::as_str)
+                .unwrap_or_default();
             Json(json!({
                 "results": [{
                     "title": format!("Perplexity: {query}"),
@@ -502,7 +515,10 @@ mod tests {
         }
 
         async fn tavily_handler(Json(payload): Json<Value>) -> impl IntoResponse {
-            let query = payload.get("query").and_then(Value::as_str).unwrap_or_default();
+            let query = payload
+                .get("query")
+                .and_then(Value::as_str)
+                .unwrap_or_default();
             Json(json!({
                 "results": [{
                     "title": format!("Tavily: {query}"),
@@ -525,7 +541,10 @@ mod tests {
         }
 
         async fn failing_handler() -> impl IntoResponse {
-            (StatusCode::BAD_GATEWAY, Json(json!({ "error": "upstream failed" })))
+            (
+                StatusCode::BAD_GATEWAY,
+                Json(json!({ "error": "upstream failed" })),
+            )
         }
 
         let app = Router::new()

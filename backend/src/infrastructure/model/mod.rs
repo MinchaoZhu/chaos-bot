@@ -1,10 +1,10 @@
-use crate::infrastructure::config::AppConfig;
 use crate::domain::audit;
 pub use crate::domain::ports::{
     ModelPort as LlmProvider, ModelRequest as LlmRequest, ModelResponse as LlmResponse,
     ModelStream as LlmStream, ModelStreamEvent as LlmStreamEvent,
 };
 use crate::domain::types::{Message, Role, ToolCall, ToolSpec, Usage};
+use crate::infrastructure::config::AppConfig;
 use anyhow::{anyhow, Context, Result};
 use async_trait::async_trait;
 use futures::{stream, Stream, StreamExt};
@@ -224,14 +224,17 @@ impl OpenAiProvider {
                 Role::Assistant => {
                     let mut obj = json!({"role": "assistant", "content": message.content});
                     if let Some(ref calls) = message.tool_calls {
-                        obj["tool_calls"] = json!(calls.iter().map(|tc| json!({
-                            "id": tc.id,
-                            "type": "function",
-                            "function": {
-                                "name": tc.name,
-                                "arguments": tc.arguments.to_string()
-                            }
-                        })).collect::<Vec<_>>());
+                        obj["tool_calls"] = json!(calls
+                            .iter()
+                            .map(|tc| json!({
+                                "id": tc.id,
+                                "type": "function",
+                                "function": {
+                                    "name": tc.name,
+                                    "arguments": tc.arguments.to_string()
+                                }
+                            }))
+                            .collect::<Vec<_>>());
                     }
                     obj
                 }

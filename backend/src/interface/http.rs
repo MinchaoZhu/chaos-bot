@@ -1,21 +1,21 @@
 use crate::application::agent::AgentLoop;
 use crate::application::{ChatService, ConfigService, SessionService};
 use crate::domain::chat::{ChatCommand, ChatEvent, ToolEvent};
-use crate::domain::ports::ChannelDispatcherPort;
 use crate::domain::config::{
     ConfigMutationInput, ConfigMutationResponse, ConfigRestartInput, ConfigStateResponse,
 };
-use crate::infrastructure::config::AgentFileConfig;
+use crate::domain::ports::ChannelDispatcherPort;
 use crate::domain::ports::SkillPort;
 use crate::domain::skills::{SkillDetail, SkillMeta};
-use crate::domain::AppError;
 use crate::domain::types::SessionState;
+use crate::domain::AppError;
 use crate::infrastructure::channels::telegram::TelegramWebhookUpdate;
+use crate::infrastructure::config::AgentFileConfig;
 use crate::infrastructure::session_store::SessionStore;
 use crate::infrastructure::skills::EmptySkillStore;
 use crate::runtime::config_runtime::ConfigRuntime;
-use axum::http::HeaderMap;
 use axum::extract::{Path, State};
+use axum::http::HeaderMap;
 use axum::response::sse::{Event, KeepAlive, Sse};
 use axum::routing::{get, post};
 use axum::{Json, Router};
@@ -165,10 +165,9 @@ async fn channel_status(
 ) -> Result<Json<ChannelStatusResponse>, AppError> {
     let (enabled_channels, connectors) = if let Some(dispatcher) = &state.channel_dispatcher {
         let channels = dispatcher.enabled_channels();
-        let health = dispatcher
-            .health_summary()
-            .await
-            .map_err(|error| AppError::internal(format!("failed to load channel health: {error}")))?;
+        let health = dispatcher.health_summary().await.map_err(|error| {
+            AppError::internal(format!("failed to load channel health: {error}"))
+        })?;
         (channels, health)
     } else {
         (Vec::new(), Vec::new())
