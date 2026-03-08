@@ -15,6 +15,8 @@ import {
   type SessionState,
   type SkillDetail,
   type SkillMeta,
+  type UpgradeApplyResponse,
+  type UpgradeStatusResponse,
 } from "../contracts/protocol";
 import type { RuntimeAdapter } from "./adapter";
 
@@ -96,6 +98,16 @@ export function createTauriAdapter(): RuntimeAdapter {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify(config ? { config } : {}),
+      });
+    },
+    async getUpgradeStatus(baseUrl: string): Promise<UpgradeStatusResponse> {
+      return requestJson<UpgradeStatusResponse>(`${baseUrl}/api/upgrade`);
+    },
+    async applyUpgrade(baseUrl: string): Promise<UpgradeApplyResponse> {
+      return requestJson<UpgradeApplyResponse>(`${baseUrl}/api/upgrade/apply`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: "{}",
       });
     },
     async listSessions(baseUrl: string): Promise<SessionState[]> {

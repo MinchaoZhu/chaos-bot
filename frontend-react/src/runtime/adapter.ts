@@ -11,6 +11,8 @@ import type {
   SessionState,
   SkillDetail,
   SkillMeta,
+  UpgradeApplyResponse,
+  UpgradeStatusResponse,
 } from "../contracts/protocol";
 
 export interface RuntimeAdapter {
@@ -25,6 +27,8 @@ export interface RuntimeAdapter {
   applyConfig(baseUrl: string, req: ConfigMutationRequest): Promise<ConfigMutationResponse>;
   resetConfig(baseUrl: string): Promise<ConfigMutationResponse>;
   restartConfig(baseUrl: string, config?: AgentFileConfig): Promise<ConfigMutationResponse>;
+  getUpgradeStatus(baseUrl: string): Promise<UpgradeStatusResponse>;
+  applyUpgrade(baseUrl: string): Promise<UpgradeApplyResponse>;
   listSkills(baseUrl: string): Promise<SkillMeta[]>;
   getSkill(baseUrl: string, skillId: string): Promise<SkillDetail>;
   chatStream(

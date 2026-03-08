@@ -299,6 +299,7 @@ pub fn build_test_state_with_registry(
         false,
         false,
         "https://api.telegram.org".to_string(),
+        None,
     );
 
     (temp, state)
@@ -443,6 +444,7 @@ pub async fn build_test_state_with_config_runtime_with_env(
         false,
         false,
         "https://api.telegram.org".to_string(),
+        None,
     );
     (temp, state, config_path)
 }

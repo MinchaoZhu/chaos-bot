@@ -5,5 +5,6 @@ pub mod error;
 pub mod ports;
 pub mod skills;
 pub mod types;
+pub mod upgrade;
 
 pub use error::{AppError, ErrorCode};

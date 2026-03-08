@@ -17,6 +17,7 @@ use crate::infrastructure::model;
 use crate::infrastructure::personality::{PersonalityLoader, PersonalitySource};
 use crate::infrastructure::skills::SkillStore;
 use crate::infrastructure::tooling::ToolRegistry;
+use crate::infrastructure::upgrade::GitHubReleaseUpdater;
 use crate::interface::api::AppState;
 use crate::runtime::bootstrap::bootstrap_runtime_dirs;
 use crate::runtime::config_runtime::{AgentFactory, ConfigRuntime, RestartMode};
@@ -34,6 +35,7 @@ pub async fn build_app(config: &AppConfig) -> Result<AppState> {
     let agent = build_agent_loop(config).await?;
     let channel_dispatcher = build_dispatcher(config).await?;
     let skills: Arc<dyn SkillPort> = Arc::new(SkillStore::new(config.skills_dir.clone()));
+    let upgrades = Arc::new(GitHubReleaseUpdater::new()?);
     let state = AppState::new(
         agent,
         channel_dispatcher,
@@ -41,8 +43,10 @@ pub async fn build_app(config: &AppConfig) -> Result<AppState> {
         config.telegram_enabled,
         config.telegram_polling,
         config.telegram_api_base_url.clone(),
+        config.frontend_dist.clone(),
     )
-    .with_skills(skills);
+    .with_skills(skills)
+    .with_upgrade(upgrades);
     maybe_spawn_telegram_poller(state.clone(), config);
     Ok(state)
 }
@@ -72,6 +76,7 @@ pub async fn build_app_with_config_runtime(
     ));
 
     let skills: Arc<dyn SkillPort> = Arc::new(SkillStore::new(config.skills_dir.clone()));
+    let upgrades = Arc::new(GitHubReleaseUpdater::new()?);
     let state = AppState::with_config_runtime(
         agent_slot,
         runtime,
@@ -80,8 +85,10 @@ pub async fn build_app_with_config_runtime(
         config.telegram_enabled,
         config.telegram_polling,
         config.telegram_api_base_url.clone(),
+        config.frontend_dist.clone(),
     )
-    .with_skills(skills);
+    .with_skills(skills)
+    .with_upgrade(upgrades);
     maybe_spawn_telegram_poller(state.clone(), config);
     Ok(state)
 }
@@ -102,24 +109,6 @@ pub async fn build_agent_loop(config: &AppConfig) -> Result<Arc<AgentLoop>> {
 
     let mut registry = ToolRegistry::new();
     registry.register_default_tools_with_config(config);
-    let mut tool_names = registry
-        .specs()
-        .into_iter()
-        .map(|spec| spec.name)
-        .collect::<Vec<_>>();
-    tool_names.sort_unstable();
-    tracing::debug!(
-        tool_count = tool_names.len(),
-        tool_names = ?tool_names,
-        search_provider = ?config.search_provider,
-        "tool registry initialized"
-    );
-    if !tool_names.iter().any(|name| name == "web_search") {
-        tracing::warn!(
-            tool_names = ?tool_names,
-            "web_search tool missing from registry"
-        );
-    }
     let tools: Arc<dyn ToolExecutorPort> = Arc::new(registry);
 
     let skills: Arc<dyn SkillPort> = Arc::new(SkillStore::new(config.skills_dir.clone()));

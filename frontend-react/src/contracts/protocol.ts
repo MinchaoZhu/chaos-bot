@@ -7,6 +7,8 @@ export type RuntimeCommand =
   | "config.apply"
   | "config.reset"
   | "config.restart"
+  | "upgrade.status"
+  | "upgrade.apply"
   | "session.list"
   | "session.create"
   | "session.get"
@@ -131,6 +133,32 @@ export interface ConfigMutationResponse {
 export interface ConfigMutationRequest {
   raw?: string;
   config?: AgentFileConfig;
+}
+
+export interface UpgradeStatusResponse {
+  supported: boolean;
+  current_version?: string;
+  latest_version?: string;
+  latest_tag_name?: string;
+  upgrade_available: boolean;
+  install_prefix?: string;
+  current_release_root?: string;
+  repository?: string;
+  latest_release_url?: string;
+  download_url?: string;
+  reason?: string;
+}
+
+export interface UpgradeApplyResponse {
+  ok: boolean;
+  action: string;
+  current_version?: string;
+  target_version?: string;
+  launcher_path?: string;
+  installed_release_root?: string;
+  relaunch_required: boolean;
+  message: string;
+  status: UpgradeStatusResponse;
 }
 
 export interface ChatRequest {

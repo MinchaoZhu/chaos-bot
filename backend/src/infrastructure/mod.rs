@@ -8,3 +8,4 @@ pub mod runtime_assets;
 pub mod session_store;
 pub mod skills;
 pub mod tooling;
+pub mod upgrade;

@@ -3,6 +3,7 @@ import type {
   AgentFileConfig,
   ConfigStateResponse,
   RuntimeError,
+  UpgradeStatusResponse,
 } from "../contracts/protocol";
 import type { RuntimeAdapter } from "../runtime/adapter";
 
@@ -91,19 +92,24 @@ export function ConfigPanel({
   onRuntimeError,
 }: ConfigPanelProps) {
   const [state, setState] = useState<ConfigStateResponse>();
+  const [upgradeStatus, setUpgradeStatus] = useState<UpgradeStatusResponse>();
   const [raw, setRaw] = useState("");
   const [searchDraft, setSearchDraft] = useState<SearchDraft>(EMPTY_SEARCH_DRAFT);
   const [status, setStatus] = useState("");
   const [loading, setLoading] = useState(false);
-  const [action, setAction] = useState<"apply" | "reset" | "restart" | undefined>();
+  const [action, setAction] = useState<"apply" | "reset" | "restart" | "upgrade" | undefined>();
 
   const busy = loading || Boolean(action);
 
   async function loadConfig() {
     setLoading(true);
     try {
-      const next = await runtime.getConfig(baseUrl);
+      const [next, nextUpgradeStatus] = await Promise.all([
+        runtime.getConfig(baseUrl),
+        runtime.getUpgradeStatus(baseUrl),
+      ]);
       setState(next);
+      setUpgradeStatus(nextUpgradeStatus);
       setRaw(next.raw);
       setSearchDraft(searchDraftFromConfig(next.running));
       setStatus("config loaded");
@@ -132,6 +138,45 @@ export function ConfigPanel({
       const runtimeError = asRuntimeError(error);
       onRuntimeError(runtimeError);
       setStatus(`apply failed: ${runtimeError.message}`);
+    } finally {
+      setAction(undefined);
+    }
+  }
+
+  async function refreshUpgradeStatus() {
+    try {
+      const next = await runtime.getUpgradeStatus(baseUrl);
+      setUpgradeStatus(next);
+      setStatus(
+        next.supported
+          ? next.upgrade_available
+            ? `upgrade available: ${next.current_version ?? "unknown"} -> ${next.latest_version ?? "unknown"}`
+            : `upgrade status ok (${next.current_version ?? "unknown"})`
+          : `upgrade unavailable: ${next.reason ?? "unsupported runtime"}`,
+      );
+      onRuntimeError(undefined);
+      onLog(`[upgrade.status] available=${next.upgrade_available}`);
+    } catch (error) {
+      const runtimeError = asRuntimeError(error);
+      onRuntimeError(runtimeError);
+      setStatus(`upgrade status failed: ${runtimeError.message}`);
+    }
+  }
+
+  async function applyUpgrade() {
+    setAction("upgrade");
+    try {
+      const response = await runtime.applyUpgrade(baseUrl);
+      setUpgradeStatus(response.status);
+      setStatus(response.message);
+      onRuntimeError(undefined);
+      onLog(
+        `[upgrade.apply] action=${response.action} current=${response.current_version ?? "-"} target=${response.target_version ?? "-"}`,
+      );
+    } catch (error) {
+      const runtimeError = asRuntimeError(error);
+      onRuntimeError(runtimeError);
+      setStatus(`upgrade failed: ${runtimeError.message}`);
     } finally {
       setAction(undefined);
     }
@@ -274,6 +319,47 @@ export function ConfigPanel({
             />
           </label>
         ) : null}
+      </section>
+
+      <section className="config-structured-section">
+        <div className="panel-head">
+          <h3>Self Upgrade</h3>
+          <button type="button" className="ghost-btn" onClick={() => void refreshUpgradeStatus()} disabled={busy}>
+            Refresh Upgrade Status
+          </button>
+        </div>
+
+        <div className="config-meta">
+          <p>
+            installed <strong>{upgradeStatus?.current_version ?? "-"}</strong>
+          </p>
+          <p>
+            latest <strong>{upgradeStatus?.latest_version ?? "-"}</strong>
+          </p>
+          <p>
+            available <strong>{upgradeStatus?.upgrade_available ? "yes" : "no"}</strong>
+          </p>
+        </div>
+
+        <p className="config-status">
+          {upgradeStatus?.supported
+            ? upgradeStatus.reason ?? "Installed release bundles can download and install newer GitHub releases. Relaunch is required after a successful upgrade."
+            : upgradeStatus?.reason ?? "Self-upgrade is only available from an installed release bundle."}
+        </p>
+
+        {upgradeStatus?.repository ? <p>repository: {upgradeStatus.repository}</p> : null}
+        {upgradeStatus?.install_prefix ? <p>prefix: {upgradeStatus.install_prefix}</p> : null}
+
+        <div className="config-actions">
+          <button
+            type="button"
+            data-testid="upgrade-apply-button"
+            onClick={() => void applyUpgrade()}
+            disabled={busy || !upgradeStatus?.supported || !upgradeStatus.upgrade_available}
+          >
+            Install Latest Release
+          </button>
+        </div>
       </section>
 
       <label className="base-url">

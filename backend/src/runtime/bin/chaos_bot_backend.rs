@@ -65,6 +65,7 @@ mod tests {
             personality_dir: temp.path().join("personality"),
             memory_dir: temp.path().join("memory"),
             memory_file: temp.path().join("MEMORY.md"),
+            frontend_dist: None,
             ..AppConfig::default()
         };
 

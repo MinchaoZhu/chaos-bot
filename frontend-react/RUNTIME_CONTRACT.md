@@ -16,6 +16,8 @@ This contract keeps the new Tauri + React shell compatible with the existing bac
 | `config.apply` | `apply_config` | `POST /api/config/apply` | Apply raw/structured config and hot-rebuild runtime agent. |
 | `config.reset` | `reset_config` | `POST /api/config/reset` | Restore disk config from running snapshot. |
 | `config.restart` | `restart_config` | `POST /api/config/restart` | Request restart (or noop when restart disabled). |
+| `upgrade.status` | n/a | `GET /api/upgrade` | Reports installed release context, latest GitHub release info, and whether an upgrade is available. |
+| `upgrade.apply` | n/a | `POST /api/upgrade/apply` | Downloads and installs the latest verified Linux release bundle, then asks the user to relaunch. |
 
 ## Stream Events
 
@@ -55,5 +57,6 @@ Envelope shape:
 ## Compatibility Notes
 
 - Backend API remains unchanged in Phase 1.
+- Backend now also exposes release-upgrade endpoints for installed Linux bundles.
 - `frontend-react/` is the only maintained web frontend.
 - Tauri runtime (`src-tauri/`) consumes the same HTTP/SSE contract.
