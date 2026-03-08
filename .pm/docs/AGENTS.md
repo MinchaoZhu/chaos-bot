@@ -38,6 +38,14 @@
   - `Refactor: <summary>`
 - 不符合格式会被 hook 拒绝推送。
 
+## Version Constraints
+- 每次新功能提交前，必须更新 `VERSION`，并同步 `backend/Cargo.toml`、`frontend-react/package.json`、`src-tauri/Cargo.toml`、`src-tauri/tauri.conf.json` 的版本号。
+- 版本策略（`MAJOR.MINOR.PATCH`）：
+  - 小迭代：`PATCH +1`（上限 `10`）。
+  - 中型更新（新增 feature、无框架变更）：`MINOR +1` 且 `PATCH=0`（`MINOR` 上限 `10`）。
+  - 大型更新（大型重构/框架变更/大型 tab 或模块新增）：`MAJOR +1` 且 `MINOR=PATCH=0`。
+- pre-push hook 会强制校验版本同步与递增规则，违反会阻止推送。
+
 ## PM File Map
 - `.pm/docs/project.md`: 当前项目上下文文档（历史记录仍保留 `cicd` 轨迹）。
 - `.pm/docs/AGENTS.md`: Runtime 状态镜像。

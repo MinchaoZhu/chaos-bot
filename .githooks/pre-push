@@ -7,6 +7,74 @@ is_zero_oid() {
   [[ "${1:-}" =~ ^0+$ ]]
 }
 
+parse_version() {
+  local version="$1"
+  if [[ "${version}" =~ ^([0-9]+)\.([0-9]+)\.([0-9]+)$ ]]; then
+    printf '%s %s %s\n' "${BASH_REMATCH[1]}" "${BASH_REMATCH[2]}" "${BASH_REMATCH[3]}"
+    return 0
+  fi
+  return 1
+}
+
+validate_version_format_and_bounds() {
+  local version="$1"
+  local major minor patch
+  if ! read -r major minor patch < <(parse_version "${version}"); then
+    echo "pre-push: VERSION '${version}' is invalid; expected format MAJOR.MINOR.PATCH" >&2
+    return 1
+  fi
+
+  if (( minor > 10 || patch > 10 )); then
+    echo "pre-push: VERSION '${version}' is out of range; MINOR and PATCH must be <= 10" >&2
+    return 1
+  fi
+}
+
+validate_version_bump_policy() {
+  local previous="$1"
+  local current="$2"
+  local old_major old_minor old_patch new_major new_minor new_patch
+
+  read -r old_major old_minor old_patch < <(parse_version "${previous}")
+  read -r new_major new_minor new_patch < <(parse_version "${current}")
+
+  if (( new_major == old_major && new_minor == old_minor && new_patch == old_patch )); then
+    echo "pre-push: VERSION must increase; still '${current}'" >&2
+    return 1
+  fi
+
+  # Small iteration: patch +1, capped at 10.
+  if (( new_major == old_major && new_minor == old_minor && new_patch == old_patch + 1 )); then
+    return 0
+  fi
+
+  # Medium update: minor +1 and patch reset to 0, capped at 10.
+  if (( new_major == old_major && new_minor == old_minor + 1 && new_patch == 0 )); then
+    return 0
+  fi
+
+  # Large update: major +1 and reset minor/patch to 0.
+  if (( new_major == old_major + 1 && new_minor == 0 && new_patch == 0 )); then
+    return 0
+  fi
+
+  echo "pre-push: invalid VERSION bump '${previous}' -> '${current}'" >&2
+  echo "allowed: patch +1, or minor +1 with patch=0, or major +1 with minor=patch=0" >&2
+  return 1
+}
+
+extract_toml_version_from_ref() {
+  local ref="$1"
+  local path="$2"
+  git show "${ref}:${path}" 2>/dev/null | sed -nE 's/^version = "([^"]+)"$/\1/p' | head -n 1
+}
+
+extract_json_version_from_ref() {
+  local ref="$1"
+  local path="$2"
+  git show "${ref}:${path}" 2>/dev/null | sed -nE 's/^[[:space:]]*"version":[[:space:]]*"([^"]+)",?$/\1/p' | head -n 1
+}
+
 validate_commit_subject() {
   local commit_sha="$1"
   local subject
@@ -16,6 +84,41 @@ validate_commit_subject() {
     echo "pre-push: commit ${commit_sha} has invalid subject:" >&2
     echo "  ${subject}" >&2
     echo "required format: Feature: ..., Fix: ..., or Refactor: ..." >&2
+    return 1
+  fi
+}
+
+validate_version_sync_for_ref() {
+  local ref_sha="$1"
+  local expected backend_version frontend_version tauri_cargo_version tauri_conf_version
+
+  expected="$(git show "${ref_sha}:VERSION" 2>/dev/null | tr -d '[:space:]' || true)"
+  if [[ -z "${expected}" ]]; then
+    echo "pre-push: failed to read VERSION from ${ref_sha}" >&2
+    return 1
+  fi
+
+  validate_version_format_and_bounds "${expected}"
+
+  backend_version="$(extract_toml_version_from_ref "${ref_sha}" "backend/Cargo.toml")"
+  frontend_version="$(extract_json_version_from_ref "${ref_sha}" "frontend-react/package.json")"
+  tauri_cargo_version="$(extract_toml_version_from_ref "${ref_sha}" "src-tauri/Cargo.toml")"
+  tauri_conf_version="$(extract_json_version_from_ref "${ref_sha}" "src-tauri/tauri.conf.json")"
+
+  if [[ "${backend_version}" != "${expected}" ]]; then
+    echo "pre-push: version mismatch at ${ref_sha}: backend/Cargo.toml='${backend_version}', expected '${expected}'" >&2
+    return 1
+  fi
+  if [[ "${frontend_version}" != "${expected}" ]]; then
+    echo "pre-push: version mismatch at ${ref_sha}: frontend-react/package.json='${frontend_version}', expected '${expected}'" >&2
+    return 1
+  fi
+  if [[ "${tauri_cargo_version}" != "${expected}" ]]; then
+    echo "pre-push: version mismatch at ${ref_sha}: src-tauri/Cargo.toml='${tauri_cargo_version}', expected '${expected}'" >&2
+    return 1
+  fi
+  if [[ "${tauri_conf_version}" != "${expected}" ]]; then
+    echo "pre-push: version mismatch at ${ref_sha}: src-tauri/tauri.conf.json='${tauri_conf_version}', expected '${expected}'" >&2
     return 1
   fi
 }
@@ -39,4 +142,16 @@ while read -r local_ref local_sha remote_ref remote_sha; do
     [[ -n "${commit_sha}" ]] || continue
     validate_commit_subject "${commit_sha}"
   done <<< "${commit_range}"
+
+  validate_version_sync_for_ref "${local_sha}"
+
+  if ! is_zero_oid "${remote_sha}"; then
+    previous_version="$(git show "${remote_sha}:VERSION" 2>/dev/null | tr -d '[:space:]' || true)"
+    current_version="$(git show "${local_sha}:VERSION" 2>/dev/null | tr -d '[:space:]' || true)"
+
+    if [[ -n "${previous_version}" ]]; then
+      validate_version_format_and_bounds "${previous_version}"
+      validate_version_bump_policy "${previous_version}" "${current_version}"
+    fi
+  fi
 done

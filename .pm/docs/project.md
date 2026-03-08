@@ -25,6 +25,9 @@
 - Packaging must account for the existing Rust backend, React frontend, and Tauri shell layout in this mono-repo.
 - Versioning and publish automation should be compatible with GitHub Actions and the repository's `master` release branch policy.
 - Repository commit subject policy is enforced by `.githooks/pre-push`: each pushed commit must match `Feature: ...`, `Fix: ...`, or `Refactor: ...`.
+- Every new feature must bump `VERSION` before push and keep `backend/Cargo.toml`, `frontend-react/package.json`, `src-tauri/Cargo.toml`, and `src-tauri/tauri.conf.json` aligned to the same version.
+- Version bump policy uses `MAJOR.MINOR.PATCH`: small iteration => `PATCH +1` (<=10), medium feature update => `MINOR +1` with `PATCH=0` (<=10), major refactor/framework/module expansion => `MAJOR +1` with `MINOR=PATCH=0`.
+- `.githooks/pre-push` enforces commit subject format, version-file sync, and valid version progression before allowing push.
 
 ## Assumptions To Validate During Execution
 

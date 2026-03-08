@@ -118,6 +118,15 @@ make test-all
   - `Refactor: <summary>`
 - 不符合上述格式的提交会被 pre-push hook 拒绝。
 
+### 2.8 Version 版本递增规则与提交前校验
+
+- 每次新功能提交前，必须更新 `VERSION`，并保持以下文件版本一致：`backend/Cargo.toml`、`frontend-react/package.json`、`src-tauri/Cargo.toml`、`src-tauri/tauri.conf.json`。
+- 版本升级规则（`MAJOR.MINOR.PATCH`）：
+  - 小迭代：增加第三位（`PATCH +1`），`PATCH` 最大到 `10`。
+  - 中型更新（新增 feature，但无框架变更）：增加第二位（`MINOR +1`），并将 `PATCH` 置为 `0`，`MINOR` 最大到 `10`。
+  - 大型更新（大型技术重构、框架变更、大型功能 tab 增加、大型模块增加）：增加第一位（`MAJOR +1`），并将 `MINOR` 与 `PATCH` 置为 `0`。
+- `.githooks/pre-push` 会校验：提交标题格式、版本文件一致性、以及 `VERSION` 是否按上述规则递增；不满足会拒绝 push。
+
 ### 2.4 CI/CD 与版本发布
 
 - 仓库基础版本由根目录 `VERSION` 文件维护，并且必须与 `backend/Cargo.toml`、`frontend-react/package.json`、`src-tauri/Cargo.toml`、`src-tauri/tauri.conf.json` 保持一致。
