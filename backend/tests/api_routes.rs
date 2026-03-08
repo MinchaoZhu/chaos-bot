@@ -3,7 +3,9 @@ use axum::http::{Request, StatusCode};
 use chaos_bot_backend::application::agent::{AgentConfig, AgentLoop};
 use chaos_bot_backend::domain::ports::UpgradePort;
 use chaos_bot_backend::domain::types::SessionState;
-use chaos_bot_backend::domain::upgrade::{UpgradeApplyResult, UpgradeStatus};
+use chaos_bot_backend::domain::upgrade::{
+    UpgradeApplyResult, UpgradeRestartResult, UpgradeStatus,
+};
 use chaos_bot_backend::infrastructure::memory::{MemoryBackend, MemoryStore};
 use chaos_bot_backend::infrastructure::model::{LlmProvider, LlmRequest, LlmResponse, LlmStream};
 use chaos_bot_backend::infrastructure::personality::{PersonalityLoader, PersonalitySource};
@@ -68,6 +70,16 @@ impl UpgradePort for MockUpgradePort {
             message: "installed 0.1.0-master.2. relaunch the launcher to start the new release"
                 .to_string(),
             status,
+        })
+    }
+
+    async fn relaunch(&self) -> anyhow::Result<UpgradeRestartResult> {
+        Ok(UpgradeRestartResult {
+            ok: true,
+            action: "relaunch",
+            launcher_path: Some("/tmp/install/bin/chaos-bot".to_string()),
+            target_version: Some("0.1.0-master.2".to_string()),
+            message: "relaunching /tmp/install/bin/chaos-bot".to_string(),
         })
     }
 }

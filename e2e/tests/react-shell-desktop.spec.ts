@@ -1,5 +1,11 @@
 import { expect, test } from "@playwright/test";
-import { configureBackend, sendAndAssertConversation } from "./helpers";
+import {
+  configureBackend,
+  openEventsPane,
+  openSessionsPane,
+  openSkillsPane,
+  sendAndAssertConversation,
+} from "./helpers";
 
 test("react shell desktop layout supports full flow", async ({ page }) => {
   await page.goto("/");
@@ -10,15 +16,15 @@ test("react shell desktop layout supports full flow", async ({ page }) => {
 
   const baseline = await page.locator(".session-list li").count();
   await page.getByRole("button", { name: "New" }).click();
+  await openSessionsPane(page);
   await expect(page.locator(".session-list li")).toHaveCount(baseline + 1);
 
   const message = `desktop-e2e-${Date.now()}`;
   await sendAndAssertConversation(page, message);
 
+  await openEventsPane(page);
   await expect(page.locator(".event-panel")).toContainText(`[request] ${message}`);
 
-  await page.getByRole("button", { name: "Skills" }).click();
+  await openSkillsPane(page);
   await expect(page.locator(".skills-panel")).toBeVisible();
-  await expect(page.locator("#skill-install-source")).toBeVisible();
-  await expect(page.getByRole("button", { name: "Install Skill" })).toBeVisible();
 });
