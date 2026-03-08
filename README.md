@@ -220,6 +220,9 @@ make test-all
 - `application` 只通过 `domain::ports::{ModelPort, ToolExecutorPort, MemoryPort}` 调用能力。
 - 具体 adapter 注入必须在 `runtime` 完成。
 - `README.md` 是架构/运行/测试单一文档入口，不新增根级 `docs/` 主文档。
+- 所有会进入发布历史的 commit 必须使用规范化标题：`feat: ...`、`fix: ...`、`docs: ...`、`refactor: ...`、`perf: ...`、`test: ...`、`build: ...`、`ci: ...`、`chore: ...`，需要 scope 时使用 `type(scope): ...`。
+- commit 首行必须是单行摘要，直接描述可发布变更；禁止使用 `wip`、`tmp`、`fixup!`、`squash!`、无意义的 `update`/`misc` 之类标题。
+- 如果变更存在约束、兼容性影响、升级动作或发布注意事项，必须写在 commit body，保证基于 commit 生成的 changelog 有足够上下文。
 
 ### 3.6 架构与交付约束（必须）
 
@@ -232,6 +235,7 @@ make test-all
   - Tauri invoke/桥接完成
   - 对应测试（至少 e2e 主路径）完成
 - 所有任务完成前必须通过 `make test-all`。
+- 准备发布前必须检查待发布提交历史可用于生成 changelog：不得混入 `merge`、`wip`、`fixup!`、`squash!`、`tmp` 这类噪声提交，必要时先整理提交历史再推送。
 
 ### 3.7 Runtime / Config 规则
 

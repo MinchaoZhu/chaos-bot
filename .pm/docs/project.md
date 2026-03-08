@@ -20,6 +20,7 @@
 - Preserve `README.md` as the single maintained architecture/runtime/testing document entry.
 - CI full gate must remain `make test-all`, with failure artifacts aligned to `.github/workflows/ci.yml`.
 - Every pushed branch tip must carry a newly updated `VERSION`; CI should fail the push if `VERSION` did not change from the pre-push ref.
+- Commits intended for release notes must follow a strict conventional format (`type: summary` or `type(scope): summary`) and must not use noisy placeholders such as `wip`, `tmp`, `fixup!`, `squash!`, or generic `update`.
 - Every new feature must include a dedicated e2e testing phase before task completion.
 - Packaging must account for the existing Rust backend, React frontend, and Tauri shell layout in this mono-repo.
 - Versioning and publish automation should be compatible with GitHub Actions and the repository's `master` release branch policy.
@@ -31,3 +32,4 @@
 - Native Tauri desktop bundles remain a follow-on option once the desktop shell can launch or embed the packaged backend consistently.
 - The implemented self-upgrade flow now targets installed Linux release bundles, consumes GitHub Release metadata plus bundle checksums, installs into a new versioned release directory, and requires a manual relaunch rather than an in-process binary swap.
 - Cross-platform self-upgrade remains a follow-on concern if additional artifact targets or native desktop installers are introduced.
+- Release preparation includes validating that the commit range is changelog-ready, with meaningful subjects and bodies for any compatibility, upgrade, or operator-facing behavior changes.
