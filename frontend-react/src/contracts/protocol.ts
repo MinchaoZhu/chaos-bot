@@ -13,6 +13,7 @@ export type RuntimeCommand =
   | "session.create"
   | "session.get"
   | "session.delete"
+  | "skill.install"
   | "chat.stream";
 
 export type StreamEventType = "session" | "delta" | "tool_call" | "done" | "error";
@@ -195,4 +196,14 @@ export interface SkillMeta {
 export interface SkillDetail {
   meta: SkillMeta;
   body: string;
+}
+
+export interface SkillInstallRequest {
+  source: string;
+}
+
+export interface SkillInstallResponse {
+  ok: boolean;
+  source: string;
+  installed: SkillMeta[];
 }

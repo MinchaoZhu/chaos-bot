@@ -1,10 +1,13 @@
 use crate::domain::ports::SkillPort;
 use crate::domain::skills::{SkillDetail, SkillMeta};
 use crate::infrastructure::runtime_assets::DEFAULT_SKILL_CREATOR_MD;
-use anyhow::{bail, Result};
+use anyhow::{anyhow, bail, Context, Result};
 use async_trait::async_trait;
-use std::path::PathBuf;
+use std::collections::BTreeSet;
+use std::path::{Path, PathBuf};
 use tokio::fs;
+use tokio::process::Command;
+use walkdir::WalkDir;
 
 // ---------------------------------------------------------------------------
 // Frontmatter parsing
@@ -42,6 +45,179 @@ fn extract_fm_field(fm: &str, key: &str) -> String {
         }
     }
     String::new()
+}
+
+fn parse_git_source(source: &str) -> Result<(String, Option<String>, PathBuf)> {
+    let source = source.trim();
+    if source.is_empty() {
+        bail!("skill source is required");
+    }
+
+    if source.ends_with(".git") {
+        return Ok((source.to_string(), None, PathBuf::from(".")));
+    }
+
+    // Supports GitHub tree URL:
+    // https://github.com/<owner>/<repo>/tree/<branch>/<path...>
+    let Some(tree_marker) = source.find("/tree/") else {
+        bail!("unsupported source format; expected .git URL or GitHub tree URL");
+    };
+
+    let repo_prefix = &source[..tree_marker];
+    let tree_tail = &source[tree_marker + "/tree/".len()..];
+    let mut segments = tree_tail.split('/').filter(|segment| !segment.is_empty());
+    let Some(branch) = segments.next() else {
+        bail!("invalid GitHub tree URL: missing branch");
+    };
+    let subpath = segments.collect::<Vec<_>>().join("/");
+    let clone_url = if repo_prefix.ends_with(".git") {
+        repo_prefix.to_string()
+    } else {
+        format!("{repo_prefix}.git")
+    };
+
+    if !clone_url.contains("github.com/") {
+        bail!("unsupported tree URL host; only github.com tree URLs are supported");
+    }
+
+    Ok((
+        clone_url,
+        Some(branch.to_string()),
+        if subpath.is_empty() {
+            PathBuf::from(".")
+        } else {
+            PathBuf::from(subpath)
+        },
+    ))
+}
+
+fn validate_skill_id(skill_name: &str) -> Result<()> {
+    if skill_name.trim().is_empty() {
+        bail!("skill_name is required");
+    }
+    if skill_name.contains("..") || skill_name.contains('/') || skill_name.contains('\\') {
+        bail!("skill_name must be a folder name");
+    }
+    Ok(())
+}
+
+pub async fn read_skill_markdown(skills_dir: &Path, skill_name: &str) -> Result<String> {
+    validate_skill_id(skill_name)?;
+    let skill_md = skills_dir.join(skill_name).join("SKILL.md");
+    if !skill_md.exists() {
+        bail!("skill '{}' not found", skill_name);
+    }
+    Ok(fs::read_to_string(skill_md).await?)
+}
+
+fn copy_directory_recursive(from: &Path, to: &Path) -> Result<()> {
+    std::fs::create_dir_all(to)?;
+    for entry in WalkDir::new(from)
+        .into_iter()
+        .filter_map(std::result::Result::ok)
+    {
+        let src_path = entry.path();
+        let relative = src_path
+            .strip_prefix(from)
+            .with_context(|| format!("failed to strip prefix from {}", src_path.display()))?;
+        let dst_path = to.join(relative);
+
+        if entry.file_type().is_dir() {
+            std::fs::create_dir_all(&dst_path)?;
+        } else if entry.file_type().is_file() {
+            if let Some(parent) = dst_path.parent() {
+                std::fs::create_dir_all(parent)?;
+            }
+            std::fs::copy(src_path, &dst_path)?;
+        }
+    }
+    Ok(())
+}
+
+pub async fn install_skills_from_git_source(
+    skills_dir: &Path,
+    source: &str,
+) -> Result<Vec<SkillMeta>> {
+    let (clone_url, branch, subpath) = parse_git_source(source)?;
+    let install_root = std::env::temp_dir().join(format!(
+        "chaos-bot-skill-install-{}-{}",
+        std::process::id(),
+        chrono::Utc::now().timestamp_nanos_opt().unwrap_or_default()
+    ));
+    let repo_dir = install_root.join("repo");
+    fs::create_dir_all(&install_root).await?;
+
+    let result = async {
+        let mut clone = Command::new("git");
+        clone.arg("clone").arg("--depth").arg("1");
+        if let Some(branch) = &branch {
+            clone.arg("--branch").arg(branch);
+        }
+        clone.arg(&clone_url).arg(&repo_dir);
+
+        let output = clone
+            .output()
+            .await
+            .context("failed to execute git clone")?;
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            bail!("git clone failed: {}", stderr.trim());
+        }
+
+        let target_root = repo_dir.join(&subpath);
+        if !target_root.exists() {
+            bail!(
+                "path '{}' not found in cloned repository",
+                subpath.display()
+            );
+        }
+
+        fs::create_dir_all(skills_dir).await?;
+        let mut skill_dirs = BTreeSet::new();
+        for entry in WalkDir::new(&target_root)
+            .into_iter()
+            .filter_map(std::result::Result::ok)
+        {
+            if !entry.file_type().is_file() || entry.file_name() != "SKILL.md" {
+                continue;
+            }
+            if let Some(parent) = entry.path().parent() {
+                skill_dirs.insert(parent.to_path_buf());
+            }
+        }
+        if skill_dirs.is_empty() {
+            bail!("no SKILL.md found under {}", target_root.display());
+        }
+
+        let mut installed = Vec::new();
+        for src_dir in skill_dirs {
+            let id = src_dir
+                .file_name()
+                .map(|name| name.to_string_lossy().to_string())
+                .ok_or_else(|| anyhow!("invalid skill folder path: {}", src_dir.display()))?;
+            validate_skill_id(&id)?;
+
+            let dst_dir = skills_dir.join(&id);
+            if dst_dir.exists() {
+                fs::remove_dir_all(&dst_dir).await?;
+            }
+            copy_directory_recursive(&src_dir, &dst_dir)?;
+
+            let content = fs::read_to_string(dst_dir.join("SKILL.md")).await?;
+            let (name, description, _body) = parse_skill_md(&content);
+            installed.push(SkillMeta {
+                id: id.clone(),
+                name: if name.is_empty() { id } else { name },
+                description,
+            });
+        }
+        installed.sort_by(|a, b| a.id.cmp(&b.id));
+        Ok(installed)
+    }
+    .await;
+
+    let _ = fs::remove_dir_all(&install_root).await;
+    result
 }
 
 // ---------------------------------------------------------------------------
@@ -249,5 +425,100 @@ mod tests {
         let store = EmptySkillStore;
         assert!(store.list().await.unwrap().is_empty());
         assert!(store.get("any").await.is_err());
+    }
+
+    #[test]
+    fn parse_git_source_supports_git_url() {
+        let (clone_url, branch, subpath) =
+            parse_git_source("https://github.com/acme/skills.git").unwrap();
+        assert_eq!(clone_url, "https://github.com/acme/skills.git");
+        assert!(branch.is_none());
+        assert_eq!(subpath, PathBuf::from("."));
+    }
+
+    #[test]
+    fn parse_git_source_supports_github_tree_url() {
+        let (clone_url, branch, subpath) =
+            parse_git_source("https://github.com/acme/skills/tree/main/skills/skill-creator")
+                .unwrap();
+        assert_eq!(clone_url, "https://github.com/acme/skills.git");
+        assert_eq!(branch.as_deref(), Some("main"));
+        assert_eq!(subpath, PathBuf::from("skills/skill-creator"));
+    }
+
+    #[tokio::test]
+    async fn read_skill_markdown_rejects_invalid_name() {
+        let tmp = tempdir().unwrap();
+        let result = read_skill_markdown(tmp.path(), "../oops").await;
+        assert!(result.is_err());
+    }
+
+    #[tokio::test]
+    async fn install_skills_from_local_git_repo() {
+        let tmp = tempdir().unwrap();
+        let remote = tmp.path().join("remote.git");
+        std::fs::create_dir_all(&remote).unwrap();
+
+        let init = std::process::Command::new("git")
+            .arg("init")
+            .arg("-b")
+            .arg("main")
+            .arg(&remote)
+            .output()
+            .unwrap();
+        assert!(init.status.success());
+
+        let config_email = std::process::Command::new("git")
+            .arg("-C")
+            .arg(&remote)
+            .arg("config")
+            .arg("user.email")
+            .arg("skill-test@example.com")
+            .output()
+            .unwrap();
+        assert!(config_email.status.success());
+        let config_name = std::process::Command::new("git")
+            .arg("-C")
+            .arg(&remote)
+            .arg("config")
+            .arg("user.name")
+            .arg("Skill Tester")
+            .output()
+            .unwrap();
+        assert!(config_name.status.success());
+
+        let skill_dir = remote.join("skills").join("demo-skill");
+        std::fs::create_dir_all(&skill_dir).unwrap();
+        std::fs::write(
+            skill_dir.join("SKILL.md"),
+            "---\nname: Demo Skill\ndescription: Demo.\n---\n\nBody.",
+        )
+        .unwrap();
+
+        let add = std::process::Command::new("git")
+            .arg("-C")
+            .arg(&remote)
+            .arg("add")
+            .arg(".")
+            .output()
+            .unwrap();
+        assert!(add.status.success());
+        let commit = std::process::Command::new("git")
+            .arg("-C")
+            .arg(&remote)
+            .arg("commit")
+            .arg("-m")
+            .arg("init")
+            .output()
+            .unwrap();
+        assert!(commit.status.success());
+
+        let installed_dir = tmp.path().join("installed-skills");
+        let installed = install_skills_from_git_source(&installed_dir, &remote.to_string_lossy())
+            .await
+            .unwrap();
+        assert_eq!(installed.len(), 1);
+        assert_eq!(installed[0].id, "demo-skill");
+        assert!(installed_dir.join("demo-skill").join("SKILL.md").exists());
     }
 }

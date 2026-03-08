@@ -11,6 +11,8 @@ import type {
   RuntimeErrorCode,
   SessionState,
   SkillDetail,
+  SkillInstallRequest,
+  SkillInstallResponse,
   SkillMeta,
   StreamEventType,
   UpgradeApplyResponse,
@@ -146,6 +148,13 @@ export function createHttpAdapter(): RuntimeAdapter {
     },
     async getSkill(baseUrl: string, skillId: string): Promise<SkillDetail> {
       return requestJson<SkillDetail>(`${baseUrl}/api/skills/${skillId}`);
+    },
+    async installSkill(baseUrl: string, req: SkillInstallRequest): Promise<SkillInstallResponse> {
+      return requestJson<SkillInstallResponse>(`${baseUrl}/api/skills/install`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(req),
+      });
     },
     async chatStream(baseUrl: string, request: ChatRequest, onEvent, onError): Promise<void> {
       let response: Response;

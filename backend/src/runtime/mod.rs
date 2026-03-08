@@ -46,6 +46,7 @@ pub async fn build_app(config: &AppConfig) -> Result<AppState> {
         config.frontend_dist.clone(),
     )
     .with_skills(skills)
+    .with_skills_dir(config.skills_dir.clone())
     .with_upgrade(upgrades);
     maybe_spawn_telegram_poller(state.clone(), config);
     Ok(state)
@@ -88,6 +89,7 @@ pub async fn build_app_with_config_runtime(
         config.frontend_dist.clone(),
     )
     .with_skills(skills)
+    .with_skills_dir(config.skills_dir.clone())
     .with_upgrade(upgrades);
     maybe_spawn_telegram_poller(state.clone(), config);
     Ok(state)

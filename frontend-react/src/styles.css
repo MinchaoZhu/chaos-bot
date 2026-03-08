@@ -361,6 +361,27 @@ button[aria-disabled="true"] {
   overflow-y: auto;
 }
 
+.skill-install {
+  display: grid;
+  gap: 0.4rem;
+  margin-bottom: 0.8rem;
+}
+
+.skill-install label {
+  font-size: 0.78rem;
+  color: var(--ink-soft);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.skill-install input {
+  width: 100%;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 0.5rem 0.62rem;
+  background: #ffffffe0;
+}
+
 .skills-hint {
   font-size: 0.82rem;
   color: var(--muted, #888);

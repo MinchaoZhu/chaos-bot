@@ -15,5 +15,11 @@ test("react shell mobile layout supports pane switching flow", async ({ page }) 
 
   await page.getByRole("button", { name: "events" }).click();
   await expect(page.locator(".event-panel")).toContainText(`[request] ${message}`);
-});
 
+  const skillsTab = page.getByRole("button", { name: "skills" });
+  await skillsTab.scrollIntoViewIfNeeded();
+  await skillsTab.click({ force: true });
+  await expect(page.locator(".skills-panel")).toBeVisible();
+  await expect(page.locator("#skill-install-source")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Install Skill" })).toBeVisible();
+});

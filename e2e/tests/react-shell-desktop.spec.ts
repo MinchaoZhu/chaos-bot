@@ -16,5 +16,9 @@ test("react shell desktop layout supports full flow", async ({ page }) => {
   await sendAndAssertConversation(page, message);
 
   await expect(page.locator(".event-panel")).toContainText(`[request] ${message}`);
-});
 
+  await page.getByRole("button", { name: "Skills" }).click();
+  await expect(page.locator(".skills-panel")).toBeVisible();
+  await expect(page.locator("#skill-install-source")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Install Skill" })).toBeVisible();
+});

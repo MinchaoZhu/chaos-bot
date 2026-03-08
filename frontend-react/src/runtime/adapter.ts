@@ -10,6 +10,8 @@ import type {
   RuntimeError,
   SessionState,
   SkillDetail,
+  SkillInstallRequest,
+  SkillInstallResponse,
   SkillMeta,
   UpgradeApplyResponse,
   UpgradeStatusResponse,
@@ -31,6 +33,7 @@ export interface RuntimeAdapter {
   applyUpgrade(baseUrl: string): Promise<UpgradeApplyResponse>;
   listSkills(baseUrl: string): Promise<SkillMeta[]>;
   getSkill(baseUrl: string, skillId: string): Promise<SkillDetail>;
+  installSkill(baseUrl: string, req: SkillInstallRequest): Promise<SkillInstallResponse>;
   chatStream(
     baseUrl: string,
     request: ChatRequest,

@@ -41,10 +41,12 @@ fn registry_register_default_tools_count() {
     // coding: read, write, edit, bash
     // read-only: read, grep, find, ls
     // memory: memory_get, memory_search
+    // skill: load_skill
     // search: web_search
-    // unique: read, write, edit, bash, grep, find, ls, memory_get, memory_search, web_search = 10
-    assert_eq!(reg.specs().len(), 10);
+    // unique: read, write, edit, bash, grep, find, ls, memory_get, memory_search, load_skill, web_search = 11
+    assert_eq!(reg.specs().len(), 11);
     assert!(reg.specs().iter().any(|spec| spec.name == "web_search"));
+    assert!(reg.specs().iter().any(|spec| spec.name == "load_skill"));
 }
 
 #[tokio::test]
@@ -178,6 +180,26 @@ async fn read_tool_missing_path_arg_errors() {
     let tool = ReadTool;
     let result = tool.execute(json!({}), &ctx).await;
     assert!(result.is_err());
+}
+
+#[tokio::test]
+async fn load_skill_tool_reads_skill_markdown() {
+    let (_temp, ctx) = make_context();
+    let skills_dir = ctx.root_dir.join("skills");
+    std::fs::create_dir_all(skills_dir.join("demo")).unwrap();
+    std::fs::write(
+        skills_dir.join("demo").join("SKILL.md"),
+        "---\nname: demo\ndescription: Demo skill.\n---\n\nBody",
+    )
+    .unwrap();
+
+    let tool = LoadSkillTool::new(skills_dir);
+    let result = tool
+        .execute(json!({"skill_name": "demo"}), &ctx)
+        .await
+        .unwrap();
+    assert!(result.output.contains("name: demo"));
+    assert!(result.output.contains("Body"));
 }
 
 // -------------------------------------------------------------------------

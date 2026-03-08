@@ -14,6 +14,8 @@ import {
   type RuntimeErrorCode,
   type SessionState,
   type SkillDetail,
+  type SkillInstallRequest,
+  type SkillInstallResponse,
   type SkillMeta,
   type UpgradeApplyResponse,
   type UpgradeStatusResponse,
@@ -127,6 +129,9 @@ export function createTauriAdapter(): RuntimeAdapter {
     },
     async getSkill(baseUrl: string, skillId: string): Promise<SkillDetail> {
       return invoke<SkillDetail>("get_skill", { baseUrl, skillId });
+    },
+    async installSkill(baseUrl: string, req: SkillInstallRequest): Promise<SkillInstallResponse> {
+      return invoke<SkillInstallResponse>("install_skill", { baseUrl, request: req });
     },
     async chatStream(baseUrl: string, request: ChatRequest, onEvent, onError): Promise<void> {
       const streamId = randomStreamId();

@@ -30,6 +30,8 @@ async function assertSkillsTabFlow(page: Page, mode: "desktop" | "mobile") {
   }
 
   await expect(page.locator(".skills-panel")).toBeVisible();
+  await expect(page.locator("#skill-install-source")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Install Skill" })).toBeVisible();
   // The built-in skill-creator skill should always be present after startup.
   const skillCards = page.locator(".skill-card");
   await expect(skillCards).toHaveCount(1);

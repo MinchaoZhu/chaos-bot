@@ -583,7 +583,7 @@ export default function App() {
                       onRuntimeError={setRuntimeError}
                     />
                   ) : (
-                    <SkillsPanel runtime={runtime} baseUrl={baseUrl} />
+                    <SkillsPanel runtime={runtime} baseUrl={baseUrl} onLog={pushLog} />
                   )}
                 </aside>
               </>
@@ -617,7 +617,7 @@ export default function App() {
             ) : null}
 
             {layout.isMobile && mobilePane === "skills" ? (
-              <SkillsPanel runtime={runtime} baseUrl={baseUrl} />
+              <SkillsPanel runtime={runtime} baseUrl={baseUrl} onLog={pushLog} />
             ) : null}
           </main>
         )}

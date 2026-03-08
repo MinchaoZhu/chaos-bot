@@ -3,6 +3,7 @@ mod search;
 use crate::domain::ports::{ToolExecutionContext, ToolExecutorPort};
 use crate::domain::types::{ToolExecution, ToolResult, ToolSpec};
 use crate::infrastructure::config::AppConfig;
+use crate::infrastructure::skills::read_skill_markdown;
 use anyhow::{anyhow, Context, Result};
 use async_trait::async_trait;
 pub use search::WebSearchTool;
@@ -60,6 +61,10 @@ impl ToolRegistry {
         self.register(MemorySearchTool);
     }
 
+    pub fn register_skill_tools(&mut self, config: &AppConfig) {
+        self.register(LoadSkillTool::new(config.skills_dir.clone()));
+    }
+
     pub fn register_search_tools(&mut self, config: &AppConfig) {
         self.register(WebSearchTool::new(config));
     }
@@ -72,6 +77,7 @@ impl ToolRegistry {
         self.register_coding_tools();
         self.register_read_only_tools();
         self.register_memory_tools();
+        self.register_skill_tools(config);
         self.register_search_tools(config);
     }
 
@@ -700,6 +706,56 @@ impl Tool for MemorySearchTool {
         Ok(ToolExecution {
             name: self.name().to_string(),
             output,
+            is_error: false,
+        })
+    }
+}
+
+pub struct LoadSkillTool {
+    skills_dir: PathBuf,
+}
+
+impl LoadSkillTool {
+    pub fn new(skills_dir: PathBuf) -> Self {
+        Self { skills_dir }
+    }
+}
+
+#[async_trait]
+impl Tool for LoadSkillTool {
+    fn name(&self) -> &'static str {
+        "load_skill"
+    }
+
+    fn description(&self) -> &'static str {
+        "Load the full SKILL.md content for a skill folder id"
+    }
+
+    fn parameters_schema(&self) -> Value {
+        json!({
+            "type": "object",
+            "properties": {
+                "skill_name": {"type": "string"}
+            },
+            "required": ["skill_name"]
+        })
+    }
+
+    async fn execute(&self, args: Value, _context: &ToolContext) -> Result<ToolExecution> {
+        let skill_name = args
+            .get("skill_name")
+            .and_then(|value| value.as_str())
+            .ok_or_else(|| anyhow!("load_skill.skill_name is required"))?
+            .trim()
+            .to_string();
+        if skill_name.is_empty() {
+            return Err(anyhow!("load_skill.skill_name is required"));
+        }
+
+        let content = read_skill_markdown(&self.skills_dir, &skill_name).await?;
+        Ok(ToolExecution {
+            name: self.name().to_string(),
+            output: content,
             is_error: false,
         })
     }

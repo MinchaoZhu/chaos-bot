@@ -88,6 +88,18 @@ struct SkillDetail {
     body: String,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct SkillInstallRequest {
+    source: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct SkillInstallResponse {
+    ok: bool,
+    source: String,
+    installed: Vec<SkillMeta>,
+}
+
 #[derive(Debug, Clone, Serialize)]
 struct ChatStreamEnvelope {
     stream_id: String,
@@ -251,6 +263,18 @@ async fn get_skill(base_url: String, skill_id: String) -> Result<SkillDetail, Ru
     get_json(format!("{}/api/skills/{}", normalize_base_url(&base_url), skill_id)).await
 }
 
+#[tauri::command]
+async fn install_skill(
+    base_url: String,
+    request: SkillInstallRequest,
+) -> Result<SkillInstallResponse, RuntimeError> {
+    post_json(
+        format!("{}/api/skills/install", normalize_base_url(&base_url)),
+        &request,
+    )
+    .await
+}
+
 fn parse_sse_block(block: &str) -> Option<(String, Value)> {
     let mut event = String::from("delta");
     let mut data = String::new();
@@ -351,7 +375,8 @@ pub fn run() {
             restart_config,
             chat_stream,
             list_skills,
-            get_skill
+            get_skill,
+            install_skill
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

@@ -14,7 +14,7 @@ use crate::domain::AppError;
 use crate::infrastructure::channels::telegram::TelegramWebhookUpdate;
 use crate::infrastructure::config::AgentFileConfig;
 use crate::infrastructure::session_store::SessionStore;
-use crate::infrastructure::skills::EmptySkillStore;
+use crate::infrastructure::skills::{install_skills_from_git_source, EmptySkillStore};
 use crate::runtime::config_runtime::ConfigRuntime;
 use axum::body::Body;
 use axum::extract::{Path, State};
@@ -45,6 +45,7 @@ pub struct AppState {
     pub telegram_polling: bool,
     pub telegram_api_base_url: String,
     pub skills: Arc<dyn SkillPort>,
+    pub skills_dir: PathBuf,
     pub frontend_dist: Option<PathBuf>,
     pub upgrades: Option<Arc<dyn UpgradePort>>,
 }
@@ -69,6 +70,7 @@ impl AppState {
             telegram_polling,
             telegram_api_base_url,
             skills: Arc::new(EmptySkillStore),
+            skills_dir: PathBuf::from("."),
             frontend_dist,
             upgrades: None,
         }
@@ -94,6 +96,7 @@ impl AppState {
             telegram_polling,
             telegram_api_base_url,
             skills: Arc::new(EmptySkillStore),
+            skills_dir: PathBuf::from("."),
             frontend_dist,
             upgrades: None,
         }
@@ -101,6 +104,11 @@ impl AppState {
 
     pub fn with_skills(mut self, skills: Arc<dyn SkillPort>) -> Self {
         self.skills = skills;
+        self
+    }
+
+    pub fn with_skills_dir(mut self, skills_dir: PathBuf) -> Self {
+        self.skills_dir = skills_dir;
         self
     }
 
@@ -146,6 +154,18 @@ pub struct ChannelStatusResponse {
     pub telegram: TelegramChannelStatus,
 }
 
+#[derive(Debug, Deserialize)]
+pub struct InstallSkillRequest {
+    pub source: String,
+}
+
+#[derive(Debug, Serialize)]
+pub struct InstallSkillResponse {
+    pub ok: bool,
+    pub source: String,
+    pub installed: Vec<SkillMeta>,
+}
+
 #[derive(Debug, Serialize)]
 pub struct TelegramChannelStatus {
     pub enabled: bool,
@@ -167,6 +187,7 @@ pub fn router(state: AppState) -> Router {
         .route("/api/config/apply", post(apply_config))
         .route("/api/config/restart", post(restart_config))
         .route("/api/skills", get(list_skills))
+        .route("/api/skills/install", post(install_skill))
         .route("/api/skills/:id", get(get_skill))
         .route("/api/upgrade", get(get_upgrade_status))
         .route("/api/upgrade/apply", post(apply_upgrade))
@@ -489,6 +510,26 @@ async fn apply_upgrade(
 ) -> Result<Json<UpgradeApplyResult>, AppError> {
     let service = UpgradeService::new(state.upgrades.clone());
     Ok(Json(service.apply().await?))
+}
+
+async fn install_skill(
+    State(state): State<AppState>,
+    Json(payload): Json<InstallSkillRequest>,
+) -> Result<Json<InstallSkillResponse>, AppError> {
+    let source = payload.source.trim();
+    if source.is_empty() {
+        return Err(AppError::bad_request("source is required"));
+    }
+
+    let installed = install_skills_from_git_source(&state.skills_dir, source)
+        .await
+        .map_err(|error| AppError::bad_request(format!("install skill failed: {error}")))?;
+
+    Ok(Json(InstallSkillResponse {
+        ok: true,
+        source: source.to_string(),
+        installed,
+    }))
 }
 
 fn chat_event_to_sse(event: ChatEvent) -> Event {

@@ -4,11 +4,13 @@ use axum::body::{to_bytes, Body};
 use axum::http::{Request, StatusCode};
 use axum::routing::post;
 use axum::{Json, Router};
+use chaos_bot_backend::domain::ports::SkillPort;
 use chaos_bot_backend::domain::types::{SessionState, ToolCall};
 use chaos_bot_backend::infrastructure::channels::telegram::TelegramConnector;
 use chaos_bot_backend::infrastructure::channels::ChannelDispatcherRegistry;
 use chaos_bot_backend::infrastructure::config::EnvSecrets;
 use chaos_bot_backend::infrastructure::model::LlmStreamEvent;
+use chaos_bot_backend::infrastructure::skills::SkillStore;
 use chaos_bot_backend::interface::api::router;
 use serde_json::{json, Value};
 use std::sync::{Arc, Mutex};
@@ -893,4 +895,105 @@ async fn telegram_webhook_ignores_malformed_update_without_text() {
     let body = to_bytes(res.into_body(), usize::MAX).await.unwrap();
     let json: Value = serde_json::from_slice(&body).unwrap();
     assert_eq!(json["ignored"], true);
+}
+
+#[tokio::test]
+async fn skill_install_endpoint_installs_from_local_git_repo() {
+    let provider = MockStreamProvider::text("hi");
+    let (temp, state) = build_test_state(Arc::new(provider));
+    let skills_dir = temp.path().join("skills-target");
+    let store = Arc::new(SkillStore::new(skills_dir.clone()));
+    store.ensure_layout().await.unwrap();
+    let state = state.with_skills(store).with_skills_dir(skills_dir.clone());
+
+    let repo_dir = temp.path().join("demo-repo.git");
+    std::fs::create_dir_all(repo_dir.join("skills").join("alpha-skill")).unwrap();
+    std::fs::write(
+        repo_dir.join("skills").join("alpha-skill").join("SKILL.md"),
+        "---\nname: Alpha\ndescription: Alpha skill.\n---\n\nBody.",
+    )
+    .unwrap();
+    let init = std::process::Command::new("git")
+        .arg("init")
+        .arg("-b")
+        .arg("main")
+        .arg(&repo_dir)
+        .output()
+        .unwrap();
+    assert!(init.status.success());
+    let config_email = std::process::Command::new("git")
+        .arg("-C")
+        .arg(&repo_dir)
+        .arg("config")
+        .arg("user.email")
+        .arg("skill-test@example.com")
+        .output()
+        .unwrap();
+    assert!(config_email.status.success());
+    let config_name = std::process::Command::new("git")
+        .arg("-C")
+        .arg(&repo_dir)
+        .arg("config")
+        .arg("user.name")
+        .arg("Skill Tester")
+        .output()
+        .unwrap();
+    assert!(config_name.status.success());
+    let add = std::process::Command::new("git")
+        .arg("-C")
+        .arg(&repo_dir)
+        .arg("add")
+        .arg(".")
+        .output()
+        .unwrap();
+    assert!(add.status.success());
+    let commit = std::process::Command::new("git")
+        .arg("-C")
+        .arg(&repo_dir)
+        .arg("commit")
+        .arg("-m")
+        .arg("init")
+        .output()
+        .unwrap();
+    assert!(commit.status.success());
+
+    let app = router(state);
+    let response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/api/skills/install")
+                .header("content-type", "application/json")
+                .body(Body::from(
+                    json!({"source": repo_dir.to_string_lossy()}).to_string(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+    let payload: Value = serde_json::from_slice(&body).unwrap();
+    assert_eq!(payload["ok"], true);
+    assert_eq!(payload["installed"][0]["id"], "alpha-skill");
+
+    let list_response = app
+        .oneshot(
+            Request::builder()
+                .method("GET")
+                .uri("/api/skills")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(list_response.status(), StatusCode::OK);
+    let list_body = to_bytes(list_response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    let list: Vec<Value> = serde_json::from_slice(&list_body).unwrap();
+    assert!(list
+        .iter()
+        .any(|entry| entry.get("id") == Some(&Value::String("alpha-skill".to_string()))));
 }
