@@ -367,4 +367,61 @@ mod tests {
         let error = CliError::from_app_error(AppError::internal("openai provider failed"));
         assert_eq!(error.kind, CliErrorKind::ProviderFailure);
     }
+
+    #[test]
+    fn classify_error_message_maps_known_error_classes() {
+        assert_eq!(
+            classify_error_message("invalid config payload").kind,
+            CliErrorKind::ConfigValidation
+        );
+        assert_eq!(
+            classify_error_message("tool call failed").kind,
+            CliErrorKind::ToolFailure
+        );
+        assert_eq!(
+            classify_error_message("reqwest connection refused").kind,
+            CliErrorKind::NetworkFailure
+        );
+        assert_eq!(
+            classify_error_message("unexpected panic").kind,
+            CliErrorKind::ExecutionFailure
+        );
+    }
+
+    #[test]
+    fn cli_error_from_app_error_preserves_not_found_and_service_unavailable() {
+        let not_found = CliError::from_app_error(AppError::not_found("session missing"));
+        assert_eq!(not_found.kind, CliErrorKind::NotFound);
+
+        let unavailable =
+            CliError::from_app_error(AppError::service_unavailable("upgrade unavailable"));
+        assert_eq!(unavailable.kind, CliErrorKind::ServiceUnavailable);
+    }
+
+    #[tokio::test]
+    async fn run_parsed_without_command_prints_help() {
+        let result = run_parsed(Cli {
+            config: None,
+            workspace: None,
+            output: OutputMode::Text,
+            non_interactive: false,
+            command: None,
+        })
+        .await;
+
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn render_parse_error_uses_success_for_help_and_invalid_request_for_bad_args() {
+        let help = Cli::try_parse_from(["chaos-bot", "--help"]).expect_err("help should exit");
+        assert_eq!(render_parse_error(help), ExitCode::SUCCESS);
+
+        let invalid =
+            Cli::try_parse_from(["chaos-bot", "unknown"]).expect_err("invalid args should fail");
+        assert_eq!(
+            render_parse_error(invalid),
+            ExitCode::from(CliErrorKind::InvalidRequest.code())
+        );
+    }
 }

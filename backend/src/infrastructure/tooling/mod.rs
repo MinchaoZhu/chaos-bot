@@ -417,7 +417,7 @@ impl Tool for BashTool {
     }
 
     fn description(&self) -> &'static str {
-        "Run a safe, allowlisted shell command in the working directory"
+        "Run a safe, allowlisted shell command such as `date`, `pwd`, `ls`, `rg`, or `cat` in the working directory for live local-environment facts"
     }
 
     fn parameters_schema(&self) -> Value {
@@ -437,7 +437,9 @@ impl Tool for BashTool {
             .ok_or_else(|| anyhow!("bash.command is required"))?;
 
         if !Self::allowed(command) {
-            return Err(anyhow!("command is not allowlisted"));
+            return Err(anyhow!(
+                "command is not allowlisted; allowed commands start with ls, pwd, cat, echo, head, tail, rg, wc, or date"
+            ));
         }
 
         let output = Command::new("bash")

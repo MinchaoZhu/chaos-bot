@@ -2,11 +2,14 @@
 mod support;
 
 use chaos_bot_backend::application::agent::AgentLoop;
-use chaos_bot_backend::domain::types::{Message, SessionState, ToolCall};
+use chaos_bot_backend::domain::ports::{ModelPort, ModelRequest, ModelResponse, ModelStream};
+use chaos_bot_backend::domain::types::{Message, Role, SessionState, ToolCall};
 use chaos_bot_backend::infrastructure::memory::MemoryHit;
 use chaos_bot_backend::infrastructure::model::LlmStreamEvent;
+use chaos_bot_backend::infrastructure::tooling::{BashTool, ToolRegistry};
+use futures::stream;
 use serde_json::json;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use support::*;
 
 // -------------------------------------------------------------------------
@@ -16,7 +19,8 @@ use support::*;
 #[test]
 fn build_system_prompt_without_memory() {
     let prompt = AgentLoop::build_system_prompt("You are helpful.", &[], &[]);
-    assert_eq!(prompt, "You are helpful.");
+    assert!(prompt.starts_with("You are helpful."));
+    assert!(prompt.contains("Runtime Tool Guidance"));
     assert!(!prompt.contains("Memory Context"));
 }
 
@@ -60,7 +64,7 @@ fn build_system_prompt_limits_to_6_hits() {
 #[test]
 fn build_system_prompt_trims_personality() {
     let prompt = AgentLoop::build_system_prompt("  padded  \n\n", &[], &[]);
-    assert_eq!(prompt, "padded");
+    assert!(prompt.starts_with("padded"));
 }
 
 #[test]
@@ -78,6 +82,15 @@ fn build_system_prompt_includes_skill_headers() {
     assert!(prompt.contains("load_skill"));
     assert!(prompt.contains("name: skill-creator"));
     assert!(prompt.contains("description: Create skills"));
+}
+
+#[test]
+fn build_system_prompt_includes_runtime_tool_guidance() {
+    let prompt = AgentLoop::build_system_prompt("Base", &[], &[]);
+    assert!(prompt.contains("Runtime Tool Guidance"));
+    assert!(prompt.contains("bash"));
+    assert!(prompt.contains("date"));
+    assert!(prompt.contains("pwd"));
 }
 
 // -------------------------------------------------------------------------
@@ -186,6 +199,132 @@ async fn run_with_tool_calls_loops() {
     assert_eq!(output.finish_reason.as_deref(), Some("stop"));
     assert_eq!(output.tool_events.len(), 1);
     assert_eq!(output.tool_events[0].call.name, "mock_tool");
+}
+
+#[derive(Clone, Default)]
+struct LiveStateProvider {
+    requests: Arc<Mutex<Vec<ModelRequest>>>,
+}
+
+#[async_trait::async_trait]
+impl ModelPort for LiveStateProvider {
+    fn name(&self) -> &'static str {
+        "live-state-provider"
+    }
+
+    async fn chat(&self, _request: ModelRequest) -> anyhow::Result<ModelResponse> {
+        Err(anyhow::anyhow!("chat() not used in this test"))
+    }
+
+    async fn chat_stream(&self, request: ModelRequest) -> anyhow::Result<ModelStream> {
+        self.requests
+            .lock()
+            .expect("requests lock")
+            .push(request.clone());
+
+        let tool_output = request
+            .messages
+            .iter()
+            .rev()
+            .find(|message| message.role == Role::Tool && message.name.as_deref() == Some("bash"))
+            .map(|message| message.content.trim().to_string());
+
+        let events = if let Some(output) = tool_output {
+            vec![
+                Ok(LlmStreamEvent {
+                    delta: format!("Current system time: {output}"),
+                    tool_call: None,
+                    done: false,
+                    usage: None,
+                }),
+                Ok(LlmStreamEvent {
+                    delta: String::new(),
+                    tool_call: None,
+                    done: true,
+                    usage: None,
+                }),
+            ]
+        } else {
+            let system_prompt = request
+                .messages
+                .iter()
+                .find(|message| message.role == Role::System)
+                .map(|message| message.content.as_str())
+                .unwrap_or_default();
+            let bash_spec = request.tools.iter().find(|spec| spec.name == "bash");
+
+            if system_prompt.contains("Runtime Tool Guidance")
+                && system_prompt.contains("bash date")
+                && bash_spec
+                    .map(|spec| {
+                        spec.description.contains("date") && spec.description.contains("pwd")
+                    })
+                    .unwrap_or(false)
+            {
+                vec![
+                    Ok(LlmStreamEvent {
+                        delta: String::new(),
+                        tool_call: Some(ToolCall {
+                            id: "tc_time".to_string(),
+                            name: "bash".to_string(),
+                            arguments: json!({"command": "date -u +%Y-%m-%dT%H:%M:%SZ"}),
+                        }),
+                        done: false,
+                        usage: None,
+                    }),
+                    Ok(LlmStreamEvent {
+                        delta: String::new(),
+                        tool_call: None,
+                        done: true,
+                        usage: None,
+                    }),
+                ]
+            } else {
+                vec![
+                    Ok(LlmStreamEvent {
+                        delta: "I cannot read your device time.".to_string(),
+                        tool_call: None,
+                        done: false,
+                        usage: None,
+                    }),
+                    Ok(LlmStreamEvent {
+                        delta: String::new(),
+                        tool_call: None,
+                        done: true,
+                        usage: None,
+                    }),
+                ]
+            }
+        };
+
+        Ok(Box::pin(stream::iter(events)))
+    }
+}
+
+#[tokio::test]
+async fn live_time_queries_use_bash_and_return_live_output() {
+    let provider = LiveStateProvider::default();
+    let request_capture = provider.requests.clone();
+    let mut registry = ToolRegistry::new();
+    registry.register(BashTool);
+
+    let (_temp, agent) = build_test_agent_with_registry(Arc::new(provider), registry);
+    let mut session = SessionState::new("s1");
+    let output = agent
+        .run(&mut session, "What is the current system time?".to_string())
+        .await
+        .unwrap();
+
+    assert_eq!(output.tool_events.len(), 1);
+    assert_eq!(output.tool_events[0].call.name, "bash");
+    let live_output = output.tool_events[0].result.output.trim().to_string();
+    assert!(!live_output.is_empty());
+    assert!(output.assistant_message.content.contains(&live_output));
+
+    let requests = request_capture.lock().expect("requests lock");
+    assert!(requests
+        .iter()
+        .any(|request| request.tools.iter().any(|spec| spec.name == "bash")));
 }
 
 // -------------------------------------------------------------------------

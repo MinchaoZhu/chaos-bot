@@ -205,8 +205,95 @@ fn backup_path(path: &Path, level: u8) -> PathBuf {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::infrastructure::config::AgentFileConfig;
+    use crate::application::{AgentConfig, AgentLoop};
+    use crate::domain::ports::{MemoryPort, ModelPort, SkillPort};
+    use crate::infrastructure::config::{
+        AgentFileConfig, AgentLlmConfig, AgentLoggingConfig, AppConfig, EnvSecrets,
+    };
+    use crate::infrastructure::memory::MemoryStore;
+    use crate::infrastructure::model::MockProvider;
+    use crate::infrastructure::personality::PersonalitySource;
+    use crate::infrastructure::skills::EmptySkillStore;
+    use crate::infrastructure::tooling::ToolRegistry;
+    use anyhow::Result;
+    use async_trait::async_trait;
+    use std::path::PathBuf;
+    use std::sync::Arc;
     use tempfile::tempdir;
+    use tokio::sync::RwLock;
+
+    struct TestPersonality;
+
+    #[async_trait]
+    impl PersonalitySource for TestPersonality {
+        async fn system_prompt(&self) -> Result<String> {
+            Ok("You are helpful.".to_string())
+        }
+    }
+
+    struct StaticAgentFactory {
+        agent: Arc<AgentLoop>,
+    }
+
+    #[async_trait]
+    impl AgentFactory for StaticAgentFactory {
+        async fn build_agent(&self, _config: &AppConfig) -> Result<Arc<AgentLoop>> {
+            Ok(self.agent.clone())
+        }
+    }
+
+    fn test_agent(temp: &tempfile::TempDir) -> Arc<AgentLoop> {
+        let memory: Arc<dyn MemoryPort> = Arc::new(MemoryStore::new(
+            temp.path().join("memory"),
+            temp.path().join("MEMORY.md"),
+        ));
+        let personality: Arc<dyn PersonalitySource> = Arc::new(TestPersonality);
+        let skills: Arc<dyn SkillPort> = Arc::new(EmptySkillStore);
+        Arc::new(AgentLoop::new(
+            Arc::new(MockProvider) as Arc<dyn ModelPort>,
+            Arc::new(ToolRegistry::new()),
+            personality,
+            memory,
+            skills,
+            AgentConfig {
+                model: "mock-model".to_string(),
+                temperature: 0.0,
+                max_tokens: 256,
+                max_iterations: 6,
+                token_budget: 2048,
+                working_dir: temp.path().to_path_buf(),
+            },
+        ))
+    }
+
+    fn test_runtime(
+        temp: &tempfile::TempDir,
+        running_file: AgentFileConfig,
+    ) -> (ConfigRuntime, Arc<AgentLoop>) {
+        let agent = test_agent(temp);
+        let running_app = AppConfig::from_inputs(
+            running_file.clone(),
+            EnvSecrets::default(),
+            temp.path().to_path_buf(),
+        );
+        let config_path = temp.path().join("config.json");
+
+        (
+            ConfigRuntime::new(
+                Arc::new(RwLock::new(agent.clone())),
+                Arc::new(StaticAgentFactory {
+                    agent: agent.clone(),
+                }),
+                running_file,
+                running_app,
+                temp.path().to_path_buf(),
+                EnvSecrets::default(),
+                config_path,
+                RestartMode::Disabled,
+            ),
+            agent,
+        )
+    }
 
     #[test]
     fn rotate_backups_keeps_two_generations() {
@@ -223,5 +310,76 @@ mod tests {
 
         assert!(bak1.exists());
         assert!(bak2.exists());
+    }
+
+    #[tokio::test]
+    async fn apply_structured_updates_running_state_and_disk() {
+        let temp = tempdir().expect("tempdir");
+        let initial = AgentFileConfig::default();
+        let (runtime, original_agent) = test_runtime(&temp, initial.clone());
+        write_config_file(runtime.config_path(), &initial).expect("write config");
+
+        let next = AgentFileConfig {
+            workspace: Some(PathBuf::from("custom-workspace")),
+            logging: AgentLoggingConfig {
+                level: Some("debug".to_string()),
+                retention_days: Some(3),
+                directory: None,
+            },
+            llm: AgentLlmConfig {
+                provider: Some("mock".to_string()),
+                model: Some("mock-model-v2".to_string()),
+                temperature: Some(0.1),
+                max_tokens: Some(512),
+                max_iterations: Some(4),
+                token_budget: Some(1024),
+            },
+            search: Default::default(),
+            secrets: Default::default(),
+        };
+
+        runtime
+            .apply_structured(next.clone())
+            .await
+            .expect("apply structured");
+
+        let running = runtime.running_config().await;
+        assert_eq!(running.llm.model.as_deref(), Some("mock-model-v2"));
+        assert_eq!(running.logging.level.as_deref(), Some("debug"));
+
+        let running_app = runtime.running_app_config().await;
+        assert!(running_app.workspace.ends_with("custom-workspace"));
+
+        let (disk, raw) = runtime.disk_config().await.expect("disk config");
+        assert_eq!(disk.llm.model.as_deref(), Some("mock-model-v2"));
+        assert!(raw.contains("mock-model-v2"));
+        assert!(runtime.backup_path(1).exists());
+        assert!(Arc::strong_count(&original_agent) >= 1);
+    }
+
+    #[tokio::test]
+    async fn restart_after_apply_structured_returns_false_when_restarts_are_disabled() {
+        let temp = tempdir().expect("tempdir");
+        let initial = AgentFileConfig::default();
+        let (runtime, _agent) = test_runtime(&temp, initial.clone());
+        write_config_file(runtime.config_path(), &initial).expect("write config");
+
+        let restarted = runtime
+            .restart_after_apply_structured(AgentFileConfig {
+                llm: AgentLlmConfig {
+                    provider: Some("mock".to_string()),
+                    model: Some("mock-model-v3".to_string()),
+                    ..Default::default()
+                },
+                ..AgentFileConfig::default()
+            })
+            .await
+            .expect("restart after apply");
+
+        assert!(!restarted);
+        assert_eq!(
+            runtime.running_config().await.llm.model.as_deref(),
+            Some("mock-model-v3")
+        );
     }
 }

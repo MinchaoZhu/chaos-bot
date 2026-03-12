@@ -310,6 +310,15 @@ async fn bash_tool_disallowed_command_errors() {
     assert!(result.is_err());
 }
 
+#[test]
+fn bash_tool_description_mentions_live_runtime_examples() {
+    let tool = BashTool;
+    let description = tool.description();
+    assert!(description.contains("date"));
+    assert!(description.contains("pwd"));
+    assert!(description.contains("live local-environment facts"));
+}
+
 #[tokio::test]
 async fn bash_tool_pwd_runs_in_root_dir() {
     let (_temp, ctx) = make_context();

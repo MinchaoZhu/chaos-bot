@@ -160,3 +160,191 @@ async fn build_config_state_response(runtime: &ConfigRuntime) -> ConfigStateResp
         disk_parse_error,
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::application::{AgentConfig, AgentLoop};
+    use crate::domain::config::{ConfigMutationInput, ConfigRestartInput};
+    use crate::domain::ports::{MemoryPort, ModelPort, SkillPort};
+    use crate::infrastructure::config::{
+        write_config_file, AgentFileConfig, AgentLlmConfig, AgentLoggingConfig, AppConfig,
+        EnvSecrets,
+    };
+    use crate::infrastructure::memory::MemoryStore;
+    use crate::infrastructure::model::MockProvider;
+    use crate::infrastructure::personality::PersonalitySource;
+    use crate::infrastructure::skills::EmptySkillStore;
+    use crate::infrastructure::tooling::ToolRegistry;
+    use crate::runtime::config_runtime::{AgentFactory, RestartMode};
+    use anyhow::Result;
+    use async_trait::async_trait;
+    use std::sync::Arc;
+    use tempfile::tempdir;
+    use tokio::sync::RwLock;
+
+    struct TestPersonality;
+
+    #[async_trait]
+    impl PersonalitySource for TestPersonality {
+        async fn system_prompt(&self) -> Result<String> {
+            Ok("You are helpful.".to_string())
+        }
+    }
+
+    struct StaticAgentFactory {
+        agent: Arc<AgentLoop>,
+    }
+
+    #[async_trait]
+    impl AgentFactory for StaticAgentFactory {
+        async fn build_agent(&self, _config: &AppConfig) -> Result<Arc<AgentLoop>> {
+            Ok(self.agent.clone())
+        }
+    }
+
+    fn test_agent(temp: &tempfile::TempDir) -> Arc<AgentLoop> {
+        let memory: Arc<dyn MemoryPort> = Arc::new(MemoryStore::new(
+            temp.path().join("memory"),
+            temp.path().join("MEMORY.md"),
+        ));
+        let personality: Arc<dyn PersonalitySource> = Arc::new(TestPersonality);
+        let skills: Arc<dyn SkillPort> = Arc::new(EmptySkillStore);
+        Arc::new(AgentLoop::new(
+            Arc::new(MockProvider) as Arc<dyn ModelPort>,
+            Arc::new(ToolRegistry::new()),
+            personality,
+            memory,
+            skills,
+            AgentConfig {
+                model: "mock-model".to_string(),
+                temperature: 0.0,
+                max_tokens: 256,
+                max_iterations: 6,
+                token_budget: 2048,
+                working_dir: temp.path().to_path_buf(),
+            },
+        ))
+    }
+
+    fn runtime_and_service(
+        initial: AgentFileConfig,
+    ) -> (tempfile::TempDir, Arc<ConfigRuntime>, ConfigService) {
+        let temp = tempdir().expect("tempdir");
+        let config_path = temp.path().join("config.json");
+        write_config_file(&config_path, &initial).expect("write config");
+        let agent = test_agent(&temp);
+        let runtime = Arc::new(ConfigRuntime::new(
+            Arc::new(RwLock::new(agent.clone())),
+            Arc::new(StaticAgentFactory { agent }),
+            initial.clone(),
+            AppConfig::from_inputs(initial, EnvSecrets::default(), temp.path().to_path_buf()),
+            temp.path().to_path_buf(),
+            EnvSecrets::default(),
+            config_path,
+            RestartMode::Disabled,
+        ));
+        let service = ConfigService::new(Some(runtime.clone()));
+        (temp, runtime, service)
+    }
+
+    #[tokio::test]
+    async fn config_service_requires_runtime() {
+        let service = ConfigService::new(None);
+        let error = service
+            .get()
+            .await
+            .expect_err("missing runtime should fail");
+        assert_eq!(error.code_str(), "service_unavailable");
+    }
+
+    #[tokio::test]
+    async fn config_service_get_reset_apply_and_restart_cover_core_paths() {
+        let initial = AgentFileConfig {
+            llm: AgentLlmConfig {
+                provider: Some("mock".to_string()),
+                model: Some("mock-model".to_string()),
+                ..Default::default()
+            },
+            logging: AgentLoggingConfig {
+                level: Some("error".to_string()),
+                ..Default::default()
+            },
+            ..AgentFileConfig::default()
+        };
+        let (_temp, runtime, service) = runtime_and_service(initial);
+
+        let state = service.get().await.expect("get");
+        assert_eq!(state.running.llm.model.as_deref(), Some("mock-model"));
+        assert_eq!(state.config_format, "config.json");
+
+        let applied = service
+            .apply(ConfigMutationInput::Raw(
+                r#"{"llm":{"provider":"mock","model":"mock-model-v2"},"logging":{"level":"debug"}}"#
+                    .to_string(),
+            ))
+            .await
+            .expect("apply raw");
+        assert_eq!(applied.action, "apply");
+        assert_eq!(
+            applied.state.running.llm.model.as_deref(),
+            Some("mock-model-v2")
+        );
+        assert_eq!(
+            applied.state.running.logging.level.as_deref(),
+            Some("debug")
+        );
+
+        let restarted = service
+            .restart(ConfigRestartInput::Structured(AgentFileConfig {
+                llm: AgentLlmConfig {
+                    provider: Some("mock".to_string()),
+                    model: Some("mock-model-v3".to_string()),
+                    ..Default::default()
+                },
+                logging: AgentLoggingConfig {
+                    level: Some("warn".to_string()),
+                    ..Default::default()
+                },
+                ..AgentFileConfig::default()
+            }))
+            .await
+            .expect("restart");
+        assert_eq!(restarted.action, "restart");
+        assert!(!restarted.restart_scheduled);
+        assert_eq!(
+            restarted.state.running.llm.model.as_deref(),
+            Some("mock-model-v3")
+        );
+
+        std::fs::write(runtime.config_path(), "{\"corrupted\":").expect("corrupt config");
+        let reset = service.reset().await.expect("reset");
+        assert_eq!(reset.action, "reset");
+        assert!(reset.state.disk_parse_error.is_none());
+        let disk = runtime
+            .disk_config()
+            .await
+            .expect("disk config after reset")
+            .0;
+        assert_eq!(disk.llm.model.as_deref(), Some("mock-model-v3"));
+    }
+
+    #[tokio::test]
+    async fn build_config_state_response_falls_back_when_disk_config_is_invalid() {
+        let initial = AgentFileConfig {
+            llm: AgentLlmConfig {
+                provider: Some("mock".to_string()),
+                model: Some("mock-model".to_string()),
+                ..Default::default()
+            },
+            ..AgentFileConfig::default()
+        };
+        let (_temp, runtime, _service) = runtime_and_service(initial);
+        std::fs::write(runtime.config_path(), "{not-json").expect("write invalid config");
+
+        let state = build_config_state_response(&runtime).await;
+        assert!(state.disk_parse_error.is_some());
+        assert_eq!(state.disk.llm.model.as_deref(), Some("mock-model"));
+        assert!(state.raw.contains("mock-model"));
+    }
+}

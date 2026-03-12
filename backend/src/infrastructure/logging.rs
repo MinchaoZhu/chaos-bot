@@ -16,28 +16,28 @@ pub fn init_logging(config: &AppConfig) -> Result<LoggingRuntime> {
     std::fs::create_dir_all(&config.log_dir)
         .with_context(|| format!("failed to create log dir: {}", config.log_dir.display()))?;
     let removed = cleanup_old_logs(&config.log_dir, config.log_retention_days)?;
-    if removed > 0 {
-        eprintln!(
-            "cleaned {removed} old log files under {}",
-            config.log_dir.display()
-        );
-    }
-
     let today = Utc::now().date_naive();
     let (file_writer, guard, log_file) = create_non_blocking_writer(&config.log_dir, today)?;
     let env_filter = tracing_subscriber::EnvFilter::try_from_default_env()
         .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new(config.log_level.clone()));
+    let file_layer = tracing_subscriber::fmt::layer()
+        .with_ansi(false)
+        .with_writer(file_writer);
 
     tracing_subscriber::registry()
         .with(env_filter)
-        .with(tracing_subscriber::fmt::layer())
-        .with(
-            tracing_subscriber::fmt::layer()
-                .with_ansi(false)
-                .with_writer(file_writer),
-        )
+        .with(file_layer)
         .try_init()
         .context("failed to initialize tracing subscriber")?;
+
+    if removed > 0 {
+        tracing::info!(
+            removed,
+            retention_days = config.log_retention_days,
+            log_dir = %config.log_dir.display(),
+            "cleaned old log files"
+        );
+    }
 
     Ok(LoggingRuntime {
         _guard: guard,

@@ -144,9 +144,25 @@ async fn resolve_chat_request(
         if existing.is_some() {
             return Ok((Some(candidate.clone()), args.parts[1..].join(" ")));
         }
+        if looks_like_session_id(candidate) {
+            return Err(CliError::not_found(format!(
+                "session '{candidate}' not found; use --session {candidate} to create or continue an explicit session id"
+            )));
+        }
     }
 
     Ok((None, args.parts.join(" ")))
+}
+
+fn looks_like_session_id(candidate: &str) -> bool {
+    const MIN_SESSION_PREFIX_LEN: usize = 8;
+
+    uuid::Uuid::parse_str(candidate).is_ok()
+        || (candidate.len() >= MIN_SESSION_PREFIX_LEN
+            && candidate
+                .chars()
+                .all(|ch| ch.is_ascii_hexdigit() || ch == '-')
+            && candidate.chars().any(|ch| ch.is_ascii_hexdigit()))
 }
 
 fn collect_tool_failure(tool_events: &[ToolEvent]) -> Option<CliError> {
@@ -171,5 +187,15 @@ mod tests {
             panic!("expected chat command");
         };
         assert_eq!(args.parts, vec!["hello".to_string(), "world".to_string()]);
+    }
+
+    #[test]
+    fn looks_like_session_id_matches_uuid_and_hex_prefixes() {
+        assert!(super::looks_like_session_id(
+            "123e4567-e89b-12d3-a456-426614174000"
+        ));
+        assert!(super::looks_like_session_id("deadbeef"));
+        assert!(!super::looks_like_session_id("follow"));
+        assert!(!super::looks_like_session_id("session-1"));
     }
 }

@@ -14,6 +14,13 @@ use serde_json;
 use std::path::PathBuf;
 use std::sync::Arc;
 
+const RUNTIME_TOOL_GUIDANCE: &str = r#"# Runtime Tool Guidance
+- For live local-environment facts, prefer a tool call over a guessed answer.
+- Use `bash` for safe allowlisted commands such as `date`, `pwd`, `ls`, `rg`, `cat`, `head`, `tail`, `wc`, and `echo`.
+- Use `bash date` for the current system time or date, `bash pwd` for the working directory, and `bash ls` or `bash rg` to confirm local files.
+- Do not claim you cannot inspect the local machine when a safe tool can answer the question directly.
+"#;
+
 #[derive(Clone, Debug)]
 pub struct AgentConfig {
     pub model: String,
@@ -285,6 +292,8 @@ impl AgentLoop {
         skills: &[SkillMeta],
     ) -> String {
         let mut prompt = personality_prompt.trim().to_string();
+        prompt.push_str("\n\n");
+        prompt.push_str(RUNTIME_TOOL_GUIDANCE);
 
         if !memory_context.is_empty() {
             let memory_block = memory_context
