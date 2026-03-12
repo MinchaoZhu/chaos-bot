@@ -1,7 +1,7 @@
 .PHONY: clean-runtime build run \
 	release-check package-linux-x86_64 package-verify upgrade-verify install-verify \
-	test test-unit test-cli test-all \
-	coverage coverage-report coverage-check
+	test test-unit test-cli test-all quality-gate \
+	coverage coverage-report coverage-check coverage-branch-check
 
 clean-runtime:
 	bash scripts/clean-runtime.sh
@@ -51,6 +51,8 @@ test-cli:
 
 test-all: test-unit test-cli
 
+quality-gate: test-all coverage-check
+
 coverage:
 	cargo llvm-cov --workspace --summary-only
 
@@ -58,4 +60,7 @@ coverage-report:
 	cargo llvm-cov --workspace --html
 
 coverage-check:
-	cargo llvm-cov --workspace --summary-only --fail-under-lines 85
+	bash scripts/run-test-suite.sh coverage-line bash scripts/check-coverage.sh line
+
+coverage-branch-check:
+	bash scripts/run-test-suite.sh coverage-branch bash scripts/check-coverage.sh branch

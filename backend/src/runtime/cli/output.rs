@@ -400,3 +400,281 @@ fn chat_tool_payload(tool: &ToolEvent) -> serde_json::Value {
         "is_error": tool.result.is_error,
     })
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::domain::types::{Message, Role, ToolCall, ToolResult};
+    use crate::infrastructure::config::{AgentFileConfig, AgentLlmConfig, AgentLoggingConfig};
+    use serde_json::json;
+    use std::path::PathBuf;
+
+    fn sample_tool_event() -> ToolEvent {
+        ToolEvent {
+            call: ToolCall {
+                id: "tool-1".to_string(),
+                name: "bash".to_string(),
+                arguments: json!({"command": "pwd"}),
+            },
+            result: ToolResult {
+                tool_call_id: "tool-1".to_string(),
+                name: "bash".to_string(),
+                output: "/tmp/workspace".to_string(),
+                is_error: false,
+            },
+        }
+    }
+
+    fn sample_usage() -> Usage {
+        Usage {
+            prompt_tokens: 10,
+            completion_tokens: 20,
+            total_tokens: 30,
+        }
+    }
+
+    fn sample_config() -> AgentFileConfig {
+        AgentFileConfig {
+            workspace: Some(PathBuf::from("workspace")),
+            logging: AgentLoggingConfig {
+                level: Some("info".to_string()),
+                retention_days: Some(7),
+                directory: Some(PathBuf::from("logs")),
+            },
+            llm: AgentLlmConfig {
+                provider: Some("mock".to_string()),
+                model: Some("mock-model".to_string()),
+                temperature: Some(0.2),
+                max_tokens: Some(512),
+                max_iterations: Some(6),
+                token_budget: Some(2048),
+            },
+            search: Default::default(),
+            secrets: Default::default(),
+        }
+    }
+
+    fn sample_config_state() -> ConfigStateResponse {
+        let config = sample_config();
+        ConfigStateResponse {
+            config_path: "/tmp/config.json".to_string(),
+            backup1_path: "/tmp/config.json.bak1".to_string(),
+            backup2_path: "/tmp/config.json.bak2".to_string(),
+            config_format: "config.json".to_string(),
+            running: config.clone(),
+            disk: config,
+            raw: "{\n  \"llm\": {}\n}\n".to_string(),
+            disk_parse_error: Some("invalid config json".to_string()),
+        }
+    }
+
+    fn sample_upgrade_status() -> UpgradeStatus {
+        UpgradeStatus {
+            supported: true,
+            current_version: Some("0.1.0".to_string()),
+            latest_version: Some("0.1.1".to_string()),
+            latest_tag_name: Some("v0.1.1".to_string()),
+            upgrade_available: true,
+            install_prefix: Some("/opt/chaos-bot".to_string()),
+            current_release_root: Some("/opt/chaos-bot/releases/0.1.0".to_string()),
+            repository: Some("test/chaos-bot".to_string()),
+            latest_release_url: Some("https://example.invalid/latest".to_string()),
+            download_url: Some("https://example.invalid/download".to_string()),
+            reason: Some("checksum mismatch".to_string()),
+        }
+    }
+
+    #[test]
+    fn write_output_supports_all_modes() {
+        let response = ChatResponse {
+            session_id: "session-1".to_string(),
+            assistant_message: "hello".to_string(),
+            finish_reason: Some("stop".to_string()),
+            usage: Some(sample_usage()),
+            tool_events: vec![sample_tool_event()],
+        };
+
+        assert!(write_output(OutputMode::Text, &response, render_chat_response_text).is_ok());
+        assert!(write_output(OutputMode::Json, &response, render_chat_response_text).is_ok());
+        assert!(write_output(OutputMode::Jsonl, &response, render_chat_response_text).is_ok());
+    }
+
+    #[test]
+    fn render_chat_stream_event_and_done_support_all_output_modes() {
+        let tool = sample_tool_event();
+        let done = ChatStreamDone {
+            session_id: "session-1".to_string(),
+            assistant_message: "final answer".to_string(),
+            finish_reason: Some("stop".to_string()),
+            usage: Some(sample_usage()),
+            tool_error_count: 1,
+        };
+
+        for mode in [OutputMode::Text, OutputMode::Json, OutputMode::Jsonl] {
+            assert!(render_chat_stream_event(
+                mode,
+                &ChatEvent::Session {
+                    session_id: "session-1".to_string(),
+                }
+            )
+            .is_ok());
+            assert!(render_chat_stream_event(mode, &ChatEvent::Delta("chunk".to_string())).is_ok());
+            assert!(render_chat_stream_event(mode, &ChatEvent::Tool(tool.clone())).is_ok());
+            assert!(render_chat_stream_done(mode, &done).is_ok());
+        }
+    }
+
+    #[test]
+    fn render_chat_response_text_includes_usage_and_tool_count() {
+        let rendered = render_chat_response_text(&ChatResponse {
+            session_id: "session-1".to_string(),
+            assistant_message: "assistant reply".to_string(),
+            finish_reason: Some("stop".to_string()),
+            usage: Some(sample_usage()),
+            tool_events: vec![sample_tool_event()],
+        });
+
+        assert!(rendered.contains("session: session-1"));
+        assert!(rendered.contains("finish_reason: stop"));
+        assert!(rendered.contains("usage: prompt=10 completion=20 total=30"));
+        assert!(rendered.contains("tool_events: 1"));
+        assert!(rendered.ends_with("assistant reply"));
+    }
+
+    #[test]
+    fn render_sessions_and_session_detail_text_cover_empty_and_messages() {
+        assert_eq!(render_sessions_text(&[]), "no sessions");
+
+        let mut session = SessionState::new("session-1");
+        session.push_message(Message::user("hello"));
+        session.push_message(Message::assistant("world"));
+        let summary = SessionSummary::from(&session);
+        let rendered_list = render_sessions_text(&[summary]);
+        assert!(rendered_list.contains("session-1"));
+        assert!(rendered_list.contains("2 messages"));
+
+        let rendered_detail = render_session_detail_text(&session);
+        assert!(rendered_detail.contains("id: session-1"));
+        assert!(rendered_detail.contains("message_count: 2"));
+        assert!(rendered_detail.contains("- User: hello"));
+        assert!(rendered_detail.contains("- Assistant: world"));
+    }
+
+    #[test]
+    fn render_config_and_delete_text_cover_mutation_contract() {
+        let state = sample_config_state();
+        let rendered_state = render_config_state_text(&state);
+        assert!(rendered_state.contains("config_path: /tmp/config.json"));
+        assert!(rendered_state.contains("disk_parse_error: invalid config json"));
+        assert!(rendered_state.contains("\"llm\""));
+
+        let rendered_mutation = render_config_mutation_text(&ConfigMutationResponse {
+            ok: true,
+            action: "restart",
+            restart_scheduled: false,
+            state,
+        });
+        assert!(rendered_mutation.contains("ok: true"));
+        assert!(rendered_mutation.contains("action: restart"));
+        assert!(rendered_mutation.contains("restart_scheduled: false"));
+        assert!(rendered_mutation.contains("backup1_path: /tmp/config.json.bak1"));
+
+        assert_eq!(
+            render_delete_text(&DeleteResponse {
+                ok: true,
+                id: "session-1",
+            }),
+            "deleted: session-1"
+        );
+    }
+
+    #[test]
+    fn render_skills_text_detail_and_install_text_cover_both_paths() {
+        let skill = SkillMeta {
+            id: "hello-skill".to_string(),
+            name: "Hello Skill".to_string(),
+            description: "Used for tests".to_string(),
+        };
+
+        assert_eq!(render_skills_text(&[]), "no skills installed");
+        let rendered_list = render_skills_text(std::slice::from_ref(&skill));
+        assert!(rendered_list.contains("hello-skill\tHello Skill\tUsed for tests"));
+
+        let rendered_detail = render_skill_detail_text(&SkillDetail {
+            meta: skill.clone(),
+            body: "Body text".to_string(),
+        });
+        assert!(rendered_detail.contains("id: hello-skill"));
+        assert!(rendered_detail.contains("body:\nBody text"));
+
+        let rendered_empty_install = render_skill_install_text(&InstallSkillResponse {
+            ok: true,
+            source: "repo.git",
+            installed: &[],
+        });
+        assert!(rendered_empty_install.contains("installed: none"));
+
+        let rendered_install = render_skill_install_text(&InstallSkillResponse {
+            ok: true,
+            source: "repo.git",
+            installed: &[skill],
+        });
+        assert!(rendered_install.contains("source: repo.git"));
+        assert!(rendered_install.contains("- hello-skill\tHello Skill\tUsed for tests"));
+    }
+
+    #[test]
+    fn render_upgrade_texts_and_payload_include_optional_fields() {
+        let status = sample_upgrade_status();
+        let rendered_status = render_upgrade_status_text(&status);
+        assert!(rendered_status.contains("supported: true"));
+        assert!(rendered_status.contains("upgrade_available: true"));
+        assert!(rendered_status.contains("reason: checksum mismatch"));
+
+        let rendered_apply = render_upgrade_apply_text(&UpgradeApplyResult {
+            ok: true,
+            action: "upgrade",
+            current_version: status.current_version.clone(),
+            target_version: status.latest_version.clone(),
+            launcher_path: Some("/opt/chaos-bot/bin/chaos-bot".to_string()),
+            installed_release_root: Some("/opt/chaos-bot/releases/0.1.1".to_string()),
+            relaunch_required: true,
+            message: "installed new release".to_string(),
+            status: status.clone(),
+        });
+        assert!(rendered_apply.contains("action: upgrade"));
+        assert!(rendered_apply.contains("target_version: 0.1.1"));
+        assert!(rendered_apply.contains("relaunch_required: true"));
+
+        let rendered_restart = render_upgrade_restart_text(&UpgradeRestartResult {
+            ok: true,
+            action: "relaunch",
+            launcher_path: Some("/opt/chaos-bot/bin/chaos-bot".to_string()),
+            target_version: status.latest_version,
+            message: "restart scheduled".to_string(),
+        });
+        assert!(rendered_restart.contains("action: relaunch"));
+        assert!(rendered_restart.contains("launcher_path: /opt/chaos-bot/bin/chaos-bot"));
+
+        let payload = chat_tool_payload(&sample_tool_event());
+        assert_eq!(payload["name"], "bash");
+        assert_eq!(payload["args"]["command"], "pwd");
+        assert_eq!(payload["output"], "/tmp/workspace");
+    }
+
+    #[test]
+    fn session_summary_copies_session_metadata() {
+        let mut session = SessionState::new("session-2");
+        session.messages = vec![Message {
+            role: Role::User,
+            content: "hello".to_string(),
+            name: None,
+            tool_call_id: None,
+            tool_calls: None,
+        }];
+
+        let summary = SessionSummary::from(&session);
+        assert_eq!(summary.id, "session-2");
+        assert_eq!(summary.message_count, 1);
+    }
+}

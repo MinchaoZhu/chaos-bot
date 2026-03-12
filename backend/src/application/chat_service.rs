@@ -102,11 +102,10 @@ impl ChatService {
                 ))),
             },
             None => {
-                let created = self
-                    .sessions
-                    .create()
-                    .await
-                    .map_err(|e| AppError::internal(format!("failed to create session: {e}")))?;
+                let created =
+                    self.sessions.create().await.map_err(|e| {
+                        AppError::internal(format!("failed to create session: {e}"))
+                    })?;
                 tracing::info!(session_id = %created.id, "chat auto-created session");
                 Ok((created.id.clone(), created))
             }

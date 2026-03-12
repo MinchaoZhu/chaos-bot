@@ -13,20 +13,27 @@ fn cli_bin() -> PathBuf {
 }
 
 fn write_mock_config(home: &Path) {
+    write_mock_config_with_logging_level(home, "error");
+}
+
+fn write_mock_config_with_logging_level(home: &Path, level: &str) {
     let config_dir = home.join(".chaos-bot");
     fs::create_dir_all(&config_dir).expect("create config dir");
     fs::write(
         config_dir.join("config.json"),
-        r#"{
-  "llm": {
+        format!(
+            r#"{{
+  "llm": {{
     "provider": "mock",
     "model": "mock-model"
-  },
-  "logging": {
-    "level": "error"
-  }
-}
+  }},
+  "logging": {{
+    "level": "{}"
+  }}
+}}
 "#,
+            level
+        ),
     )
     .expect("write config");
 }
@@ -216,8 +223,22 @@ fn cli_chat_sessions_config_and_stdin_flow() {
     );
     assert_eq!(apply["ok"], true);
 
+    let apply_stdin = run_cli_with_stdin(
+        home.path(),
+        &["--output", "json", "config", "apply", "--stdin"],
+        r#"{"llm":{"provider":"mock","model":"mock-model-v3"},"logging":{"level":"warn"}}"#,
+    );
+    assert!(apply_stdin.status.success());
+    let apply_stdin_json: Value =
+        serde_json::from_slice(&apply_stdin.stdout).expect("apply stdin json");
+    assert_eq!(apply_stdin_json["ok"], true);
+
     let updated_config = run_cli_json(home.path(), &["--output", "json", "config", "get"]);
-    assert_eq!(updated_config["running"]["llm"]["model"], "mock-model-v2");
+    assert_eq!(updated_config["running"]["llm"]["model"], "mock-model-v3");
+
+    let restart = run_cli_json(home.path(), &["--output", "json", "config", "restart"]);
+    assert_eq!(restart["ok"], true);
+    assert_eq!(restart["restart_scheduled"], false);
 
     let delete = run_cli_json(
         home.path(),
@@ -232,6 +253,94 @@ fn cli_chat_sessions_config_and_stdin_flow() {
     assert!(!get_missing.status.success());
     let stderr = String::from_utf8(get_missing.stderr).expect("stderr utf8");
     assert!(stderr.contains("\"code\": \"not_found\""));
+}
+
+#[test]
+fn cli_success_output_is_clean_and_logs_stay_in_file() {
+    let home = TempDir::new().expect("tempdir");
+    write_mock_config_with_logging_level(home.path(), "info");
+
+    let sessions = run_cli(home.path(), &["sessions", "list"]);
+    assert!(sessions.status.success());
+    assert_eq!(
+        String::from_utf8(sessions.stdout).expect("stdout utf8"),
+        "no sessions\n"
+    );
+    assert_eq!(String::from_utf8(sessions.stderr).expect("stderr utf8"), "");
+
+    let chat = run_cli(
+        home.path(),
+        &["--output", "json", "chat", "hello from clean output"],
+    );
+    assert!(chat.status.success());
+    assert_eq!(String::from_utf8(chat.stderr).expect("stderr utf8"), "");
+    let response: Value = serde_json::from_slice(&chat.stdout).expect("chat json");
+    assert_eq!(response["finish_reason"], "stop");
+
+    let logs_dir = home.path().join(".chaos-bot").join("logs");
+    let log_path = fs::read_dir(&logs_dir)
+        .expect("read logs dir")
+        .map(|entry| entry.expect("dir entry").path())
+        .find(|path| path.extension().and_then(|ext| ext.to_str()) == Some("log"))
+        .expect("log file");
+    let log_text = fs::read_to_string(log_path).expect("read log file");
+    assert!(log_text.contains("chaos-bot logging initialized"));
+    assert!(log_text.contains("chat completed"));
+}
+
+#[test]
+fn cli_chat_rejects_unknown_positional_session_like_id() {
+    let home = TempDir::new().expect("tempdir");
+    write_mock_config(home.path());
+
+    let created = run_cli_json(home.path(), &["--output", "json", "chat", "seed session"]);
+    let session_id = created["session_id"].as_str().expect("session id");
+    let truncated = &session_id[..8];
+
+    let failed = run_cli(
+        home.path(),
+        &[
+            "--output",
+            "json",
+            "chat",
+            truncated,
+            "follow up should fail",
+        ],
+    );
+    assert!(!failed.status.success());
+    let stderr = String::from_utf8(failed.stderr).expect("stderr utf8");
+    assert!(stderr.contains("\"code\": \"not_found\""));
+    assert!(stderr.contains(truncated));
+    assert!(stderr.contains("--session"));
+
+    let sessions = run_cli_json(home.path(), &["--output", "json", "sessions", "list"]);
+    assert_eq!(sessions.as_array().expect("sessions").len(), 1);
+}
+
+#[test]
+fn cli_chat_session_flag_can_create_named_session() {
+    let home = TempDir::new().expect("tempdir");
+    write_mock_config(home.path());
+
+    let response = run_cli_json(
+        home.path(),
+        &[
+            "--output",
+            "json",
+            "chat",
+            "--session",
+            "manual-session",
+            "hello explicit session",
+        ],
+    );
+    assert_eq!(response["session_id"], "manual-session");
+
+    let session = run_cli_json(
+        home.path(),
+        &["--output", "json", "sessions", "get", "manual-session"],
+    );
+    assert_eq!(session["id"], "manual-session");
+    assert_eq!(session["messages"].as_array().expect("messages").len(), 2);
 }
 
 #[test]
@@ -280,6 +389,16 @@ fn cli_skills_upgrade_and_workspace_flag_flow() {
         .expect("skills array")
         .iter()
         .any(|skill| skill["id"] == "hello-skill"));
+
+    let skill = run_cli_json(
+        home.path(),
+        &["--output", "json", "skills", "get", "hello-skill"],
+    );
+    assert_eq!(skill["meta"]["id"], "hello-skill");
+    assert!(skill["body"]
+        .as_str()
+        .expect("skill body")
+        .contains("Used by CLI integration tests"));
 
     let upgrade = run_cli_json(home.path(), &["--output", "json", "upgrade", "status"]);
     assert_eq!(upgrade["supported"], Value::Bool(false));

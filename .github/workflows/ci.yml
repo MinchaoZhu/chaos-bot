@@ -37,7 +37,7 @@ jobs:
       - name: Run full test gate
         env:
           CHAOS_BOT_KEEP_TMP_ON_FAIL: "1"
-        run: make test-all
+        run: make quality-gate
 
       - name: Upload failure artifacts (runtime logs/config/cli)
         if: ${{ failure() }}
@@ -70,6 +70,27 @@ jobs:
           make package-verify
           make install-verify
           make upgrade-verify
+
+  coverage-branch:
+    needs: test
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    continue-on-error: true
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Rust Nightly
+        uses: dtolnay/rust-toolchain@nightly
+        with:
+          components: llvm-tools-preview
+
+      - name: Rust Cache
+        uses: Swatinem/rust-cache@v2
+
+      - name: Run branch coverage gate
+        run: make coverage-branch-check
 
   release:
     if: github.event_name == 'push' && github.ref == 'refs/heads/master'
