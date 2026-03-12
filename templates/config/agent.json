@@ -1,9 +1,5 @@
 {
   "workspace": ".chaos-bot",
-  "server": {
-    "host": "0.0.0.0",
-    "port": 3000
-  },
   "llm": {
     "provider": "openai",
     "model": "gpt-4o-mini",
@@ -13,13 +9,6 @@
     "token_budget": 12000
   },
   "search": {},
-  "channels": {
-    "telegram": {
-      "enabled": false,
-      "polling": false,
-      "api_base_url": "https://api.telegram.org"
-    }
-  },
   "logging": {
     "level": "info",
     "retention_days": 7,

@@ -1,24 +1,25 @@
 pub mod bootstrap;
+pub mod cli;
 pub mod config_runtime;
 
 use anyhow::Result;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use tokio::sync::RwLock;
-use tokio::time::{sleep, Duration};
 
 use crate::application::agent::{AgentConfig, AgentLoop};
-use crate::application::ChatService;
-use crate::domain::ports::{MemoryPort, SkillPort, ToolExecutorPort};
-use crate::infrastructure::channels::build_dispatcher;
-use crate::infrastructure::channels::telegram::poll_updates_once;
-use crate::infrastructure::config::{workspace_base_for, AgentFileConfig, AppConfig, EnvSecrets};
+use crate::application::{ChatService, SessionService, UpgradeService};
+use crate::domain::ports::{MemoryPort, SkillPort, ToolExecutorPort, UpgradePort};
+use crate::infrastructure::config::{
+    workspace_base_for, AgentFileConfig, AppConfig, EnvSecrets, LoadedConfig,
+};
 use crate::infrastructure::memory::MemoryStore;
 use crate::infrastructure::model;
 use crate::infrastructure::personality::{PersonalityLoader, PersonalitySource};
+use crate::infrastructure::session_store::SessionStore;
 use crate::infrastructure::skills::SkillStore;
 use crate::infrastructure::tooling::ToolRegistry;
 use crate::infrastructure::upgrade::GitHubReleaseUpdater;
-use crate::interface::api::AppState;
 use crate::runtime::bootstrap::bootstrap_runtime_dirs;
 use crate::runtime::config_runtime::{AgentFactory, ConfigRuntime, RestartMode};
 
@@ -27,45 +28,89 @@ struct BackendAgentFactory;
 #[async_trait::async_trait]
 impl AgentFactory for BackendAgentFactory {
     async fn build_agent(&self, config: &AppConfig) -> Result<Arc<AgentLoop>> {
-        build_agent_loop(config).await
+        let skills: Arc<dyn SkillPort> = Arc::new(SkillStore::new(config.skills_dir.clone()));
+        skills.ensure_layout().await?;
+        build_agent_loop(config, skills).await
     }
 }
 
-pub async fn build_app(config: &AppConfig) -> Result<AppState> {
-    let agent = build_agent_loop(config).await?;
-    let channel_dispatcher = build_dispatcher(config).await?;
-    let skills: Arc<dyn SkillPort> = Arc::new(SkillStore::new(config.skills_dir.clone()));
-    let upgrades = Arc::new(GitHubReleaseUpdater::new()?);
-    let state = AppState::new(
-        agent,
-        channel_dispatcher,
-        config.telegram_webhook_secret.clone(),
-        config.telegram_enabled,
-        config.telegram_polling,
-        config.telegram_api_base_url.clone(),
-        config.frontend_dist.clone(),
-    )
-    .with_skills(skills)
-    .with_skills_dir(config.skills_dir.clone())
-    .with_upgrade(upgrades);
-    maybe_spawn_telegram_poller(state.clone(), config);
-    Ok(state)
+#[derive(Clone)]
+pub struct AppContext {
+    pub config: AppConfig,
+    pub agent: Arc<RwLock<Arc<AgentLoop>>>,
+    pub sessions: SessionStore,
+    pub config_runtime: Arc<ConfigRuntime>,
+    pub skills: Arc<dyn SkillPort>,
+    pub skills_dir: PathBuf,
+    pub upgrades: Arc<dyn UpgradePort>,
 }
 
-pub async fn build_app_with_config_runtime(
+impl AppContext {
+    pub fn chat_service(&self) -> ChatService {
+        ChatService::new(self.agent.clone(), self.sessions.clone())
+    }
+
+    pub fn session_service(&self) -> SessionService {
+        SessionService::new(self.sessions.clone())
+    }
+
+    pub fn config_service(&self) -> crate::application::ConfigService {
+        crate::application::ConfigService::new(Some(self.config_runtime.clone()))
+    }
+
+    pub fn upgrade_service(&self) -> UpgradeService {
+        UpgradeService::new(Some(self.upgrades.clone()))
+    }
+}
+
+pub fn load_runtime_config(
+    config_path: Option<&Path>,
+    workspace_override: Option<&Path>,
+) -> Result<LoadedConfig> {
+    let cwd = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
+    let env_secrets = EnvSecrets::from_env();
+    let mut loaded = match config_path {
+        Some(path) => {
+            let (app, file, raw) =
+                AppConfig::from_config_file_path(path, env_secrets, cwd.clone())?;
+            LoadedConfig { app, file, raw }
+        }
+        None => AppConfig::load_with_source()?,
+    };
+
+    if let Some(workspace) = workspace_override {
+        loaded.file.workspace = Some(workspace.to_path_buf());
+        loaded
+            .app
+            .apply_workspace_override(workspace.to_path_buf(), &workspace_base_for(&cwd));
+    }
+
+    Ok(loaded)
+}
+
+pub async fn build_app(config: &AppConfig) -> Result<AppContext> {
+    build_context(config, AgentFileConfig::default(), RestartMode::Disabled).await
+}
+
+pub async fn build_context(
     config: &AppConfig,
     file_config: AgentFileConfig,
     restart_mode: RestartMode,
-) -> Result<AppState> {
-    let agent = build_agent_loop(config).await?;
-    let channel_dispatcher = build_dispatcher(config).await?;
+) -> Result<AppContext> {
+    let skills: Arc<dyn SkillPort> = Arc::new(SkillStore::new(config.skills_dir.clone()));
+    skills.ensure_layout().await?;
+
+    let upgrades: Arc<dyn UpgradePort> = Arc::new(GitHubReleaseUpdater::new()?);
+    let sessions = SessionStore::new(config.sessions_dir.clone());
+    sessions.ensure_layout().await?;
+
+    let agent = build_agent_loop(config, skills.clone()).await?;
     let agent_slot = Arc::new(RwLock::new(agent));
 
-    let cwd = std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from("."));
+    let cwd = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
     let workspace_base = workspace_base_for(&cwd);
     let env_secrets = EnvSecrets::from_env();
-
-    let runtime = Arc::new(ConfigRuntime::new(
+    let config_runtime = Arc::new(ConfigRuntime::new(
         agent_slot.clone(),
         Arc::new(BackendAgentFactory),
         file_config,
@@ -76,26 +121,21 @@ pub async fn build_app_with_config_runtime(
         restart_mode,
     ));
 
-    let skills: Arc<dyn SkillPort> = Arc::new(SkillStore::new(config.skills_dir.clone()));
-    let upgrades = Arc::new(GitHubReleaseUpdater::new()?);
-    let state = AppState::with_config_runtime(
-        agent_slot,
-        runtime,
-        channel_dispatcher,
-        config.telegram_webhook_secret.clone(),
-        config.telegram_enabled,
-        config.telegram_polling,
-        config.telegram_api_base_url.clone(),
-        config.frontend_dist.clone(),
-    )
-    .with_skills(skills)
-    .with_skills_dir(config.skills_dir.clone())
-    .with_upgrade(upgrades);
-    maybe_spawn_telegram_poller(state.clone(), config);
-    Ok(state)
+    Ok(AppContext {
+        config: config.clone(),
+        agent: agent_slot,
+        sessions,
+        config_runtime,
+        skills,
+        skills_dir: config.skills_dir.clone(),
+        upgrades,
+    })
 }
 
-pub async fn build_agent_loop(config: &AppConfig) -> Result<Arc<AgentLoop>> {
+pub async fn build_agent_loop(
+    config: &AppConfig,
+    skills: Arc<dyn SkillPort>,
+) -> Result<Arc<AgentLoop>> {
     bootstrap_runtime_dirs(config).await?;
     tokio::fs::create_dir_all(&config.memory_dir).await?;
 
@@ -113,9 +153,6 @@ pub async fn build_agent_loop(config: &AppConfig) -> Result<Arc<AgentLoop>> {
     registry.register_default_tools_with_config(config);
     let tools: Arc<dyn ToolExecutorPort> = Arc::new(registry);
 
-    let skills: Arc<dyn SkillPort> = Arc::new(SkillStore::new(config.skills_dir.clone()));
-    skills.ensure_layout().await?;
-
     Ok(Arc::new(AgentLoop::new(
         provider,
         tools,
@@ -126,89 +163,56 @@ pub async fn build_agent_loop(config: &AppConfig) -> Result<Arc<AgentLoop>> {
     )))
 }
 
-pub async fn shutdown_signal() {
-    let ctrl_c = async {
-        tokio::signal::ctrl_c()
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn build_app_works_with_mock_provider() {
+        let temp = tempfile::tempdir().expect("tempdir");
+        let config = AppConfig {
+            provider: "mock".to_string(),
+            workspace: temp.path().to_path_buf(),
+            log_dir: temp.path().join("logs"),
+            working_dir: temp.path().to_path_buf(),
+            personality_dir: temp.path().join("personality"),
+            memory_dir: temp.path().join("memory"),
+            memory_file: temp.path().join("MEMORY.md"),
+            sessions_dir: temp.path().join("sessions"),
+            ..AppConfig::default()
+        };
+
+        let context = build_app(&config).await.expect("build_app");
+        let sessions = context.sessions.list().await.expect("list sessions");
+        assert!(sessions.is_empty());
+        assert!(config.personality_dir.exists());
+        assert!(config.memory_dir.exists());
+        assert!(config.memory_file.exists());
+        assert!(config.sessions_dir.exists());
+    }
+
+    #[tokio::test]
+    async fn build_context_uses_runtime_config() {
+        let temp = tempfile::tempdir().expect("tempdir");
+        let config = AppConfig {
+            provider: "mock".to_string(),
+            workspace: temp.path().to_path_buf(),
+            config_path: temp.path().join("config.json"),
+            log_dir: temp.path().join("logs"),
+            working_dir: temp.path().to_path_buf(),
+            personality_dir: temp.path().join("personality"),
+            memory_dir: temp.path().join("memory"),
+            memory_file: temp.path().join("MEMORY.md"),
+            sessions_dir: temp.path().join("sessions"),
+            skills_dir: temp.path().join("skills"),
+            ..AppConfig::default()
+        };
+
+        let context = build_context(&config, AgentFileConfig::default(), RestartMode::Disabled)
             .await
-            .expect("failed to install Ctrl+C handler");
-    };
+            .expect("build_context");
 
-    #[cfg(unix)]
-    let terminate = async {
-        tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())
-            .expect("failed to install signal handler")
-            .recv()
-            .await;
-    };
-
-    #[cfg(not(unix))]
-    let terminate = std::future::pending::<()>();
-
-    tokio::select! {
-        _ = ctrl_c => {},
-        _ = terminate => {},
+        assert_eq!(context.config_runtime.config_path(), config.config_path);
+        assert_eq!(context.config.config_path, config.config_path);
     }
-}
-
-fn maybe_spawn_telegram_poller(state: AppState, config: &AppConfig) {
-    if !config.telegram_enabled || !config.telegram_polling {
-        return;
-    }
-    let Some(bot_token) = config.telegram_bot_token.clone() else {
-        tracing::warn!(
-            "telegram polling enabled but no bot token configured; poller is not started"
-        );
-        return;
-    };
-
-    let api_base_url = config.telegram_api_base_url.clone();
-    tokio::spawn(async move {
-        let client = reqwest::Client::new();
-        let mut offset: i64 = 0;
-        tracing::info!(
-            channel = "telegram",
-            mode = "polling",
-            "telegram poller started"
-        );
-
-        loop {
-            let updates = match poll_updates_once(&client, &api_base_url, &bot_token, offset, 15)
-                .await
-            {
-                Ok(items) => items,
-                Err(error) => {
-                    tracing::warn!(channel = "telegram", mode = "polling", error = %error, "telegram poller request failed");
-                    sleep(Duration::from_secs(2)).await;
-                    continue;
-                }
-            };
-
-            if updates.is_empty() {
-                continue;
-            }
-
-            let service = ChatService::new(
-                state.agent.clone(),
-                state.sessions.clone(),
-                state.channel_dispatcher.clone(),
-            );
-
-            for update in updates {
-                if update.update_id + 1 > offset {
-                    offset = update.update_id + 1;
-                }
-                let Some(inbound) = update.into_inbound_message() else {
-                    continue;
-                };
-                if let Err(error) = service.run_channel_message(inbound).await {
-                    tracing::warn!(
-                        channel = "telegram",
-                        mode = "polling",
-                        error = %error.message(),
-                        "telegram poller failed to process inbound update"
-                    );
-                }
-            }
-        }
-    });
 }

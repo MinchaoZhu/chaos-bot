@@ -1,264 +1,126 @@
 # chaos-bot
 
-Personal AI agent assistant with Rust backend, React shell, and Tauri v2 runtime.
+`chaos-bot` is now a pure CLI runtime. Each invocation loads config, runs one command, writes to stdout/stderr, and exits. Sessions are persisted on disk under the workspace so conversation state survives across separate commands.
 
-## Part 1: 功能、架构、技术栈
+## Overview
 
-### 1.1 核心功能
+- Runtime: Rust CLI only
+- Binary: `chaos-bot`
+- Workspace data:
+  - `~/.chaos-bot/config.json`
+  - `~/.chaos-bot/sessions/*.json`
+  - `~/.chaos-bot/logs/`
+  - `~/.chaos-bot/memory/`
+  - `~/.chaos-bot/skills/`
 
-- 会话管理：创建/读取/删除会话，维护历史消息。
-- 聊天流式输出：`/api/chat` 基于 SSE 输出 `session/delta/tool_call/done/error` 事件。
-- Agent 工具链：内置 `read/write/edit/bash/grep/find/ls/memory_get/memory_search`。
-- 配置中心：支持 `get/apply/reset/restart`，并带 `config.json.bak1/.bak2` 轮转备份。
-- 多端壳：同一份 runtime contract 同时服务 Web React Shell 与 Tauri Shell。
-
-### 1.2 架构分层（Backend DDD Frozen）
-
-```text
-backend/src
-  application/      # use cases (agent/chat/config/session)
-  domain/           # core models, errors, ports contracts
-  infrastructure/   # adapters
-    model/          # ModelPort implementations
-    tooling/        # ToolExecutorPort implementations
-  interface/        # HTTP/SSE router + handlers
-  runtime/          # bootstrap + DI + binary composition
-  lib.rs
-```
-
-依赖方向（必须保持）：
-
-1. `interface -> application -> domain`
-2. `runtime -> {application, interface, infrastructure}`
-3. `application` 只能依赖 `domain::ports`，不能直接依赖具体 adapter
-4. 反向依赖、跨层倒挂禁止
-
-### 1.3 前后端/Tauri 关系
-
-- `frontend-react/`：UI 与交互层。
-- `src-tauri/`：Tauri invoke 桥接层。
-- `backend/`：业务与能力中心。
-- Web 模式链路：`frontend-react -> HTTP/SSE -> backend`
-- Tauri 模式链路：`frontend-react -> invoke -> src-tauri -> HTTP/SSE -> backend`
-
-### 1.4 技术栈
-
-- Backend: Rust, Axum, Tokio
-- Frontend: React 18, TypeScript, Vite
-- Desktop/Mobile Shell: Tauri v2
-- Testing: Rust tests + Playwright e2e
-
----
-
-## Part 2: 开发指南（含 Agent 约束）
-
-### 2.1 环境准备
-
-- Rust toolchain
-- Node.js 20+
-- Linux desktop (Tauri):
+## Build And Run
 
 ```bash
-sudo apt-get update
-sudo apt-get install -y \
-  libwebkit2gtk-4.1-dev \
-  libgtk-3-dev \
-  librsvg2-dev \
-  libayatana-appindicator3-dev
+cargo build -p chaos-bot-backend --bin chaos-bot
+cargo run -p chaos-bot-backend -- --help
 ```
 
-### 2.2 启动命令（后端 / 前端 / Tauri）
+Useful shortcuts:
 
 ```bash
-# 安装前端依赖
-make frontend-install
-
-# 启动后端（默认 3000）
+make build
 make run
-
-# 启动前端开发服务器（默认 1420）
-# 建议开发联调时让前端代理到后端
-VITE_BACKEND_PROXY_TARGET=http://127.0.0.1:3000 make frontend-dev
-
-# 启动 Tauri Desktop Dev Shell
-make tauri-dev
-
-# Tauri 环境检查
-make tauri-preflight
-
-# Tauri Desktop Debug Build（不打包原生 bundle）
-make tauri-build-desktop
-```
-
-### 2.3 测试命令
-
-```bash
-# 单元 + 集成
-make test
-
-# 仅单元
-make test-unit
-
-# 仅集成
-make test-integration
-
-# 仅 e2e (Playwright)
-make test-e2e
-
-# 全量门禁（必过）
 make test-all
+make package-verify
 ```
 
-### 2.7 Git Hook 与 Commit 标题约束
+## Core Commands
 
-- 仓库启用了 `core.hooksPath=.githooks`，`push` 时会执行 `.githooks/pre-push`。
-- 所有待推送提交的标题（subject）必须匹配以下格式之一：
-  - `Feature: <summary>`
-  - `Fix: <summary>`
-  - `Refactor: <summary>`
-- 不符合上述格式的提交会被 pre-push hook 拒绝。
-
-### 2.8 Version 版本递增规则与提交前校验
-
-- 每次新功能提交前，必须更新 `VERSION`，并保持以下文件版本一致：`backend/Cargo.toml`、`frontend-react/package.json`、`src-tauri/Cargo.toml`、`src-tauri/tauri.conf.json`。
-- 版本升级规则（`MAJOR.MINOR.PATCH`）：
-  - 小迭代：增加第三位（`PATCH +1`），`PATCH` 最大到 `10`。
-  - 中型更新（新增 feature，但无框架变更）：增加第二位（`MINOR +1`），并将 `PATCH` 置为 `0`，`MINOR` 最大到 `10`。
-  - 大型更新（大型技术重构、框架变更、大型功能 tab 增加、大型模块增加）：增加第一位（`MAJOR +1`），并将 `MINOR` 与 `PATCH` 置为 `0`。
-- `.githooks/pre-push` 会校验：提交标题格式、版本文件一致性、以及 `VERSION` 是否按上述规则递增；不满足会拒绝 push。
-
-### 2.4 CI/CD 与版本发布
-
-- 仓库基础版本由根目录 `VERSION` 文件维护，并且必须与 `backend/Cargo.toml`、`frontend-react/package.json`、`src-tauri/Cargo.toml`、`src-tauri/tauri.conf.json` 保持一致。
-- 本地发布前校验命令：`make release-check`
-- 本地 Linux 安装包构建命令：`make package-linux-x86_64`
-- 本地安装包验证命令：`make package-verify`
-- 本地自升级验证命令：`make upgrade-verify`
-- GitHub Actions 在 `master` push 时执行完整门禁并发布 GitHub Release。
-- 发布标签格式为 `v<base-version>-master.<commit-count>`，例如 `v0.1.0-master.123`。
-- 当前发布资产包含 `chaos-bot-<release>-linux-x86_64.tar.gz`、对应 `.sha256`、bundle manifest，以及 release metadata/checksum。
-- Linux 安装包解压后包含 `install.sh`，默认安装到 `~/.local/share/chaos-bot/releases/<release>`，并生成 `~/.local/bin/chaos-bot` 启动器；启动器会自动设置 `CHAOS_BOT_FRONTEND_DIST`，由后端直接提供打包后的前端静态资源。
-- 已安装的 Linux bundle 运行时可通过 `GET /api/upgrade` 与 `POST /api/upgrade/apply` 查询并安装最新 GitHub Release；升级成功后需要重新启动 `~/.local/bin/chaos-bot` 才会切换到新版本。
-
-### 2.4 Agent 开发指南
-
-新增 agent 能力时，必须遵守：
-
-- 模型 provider 只放在 `backend/src/infrastructure/model`。
-- 工具注册与实现只放在 `backend/src/infrastructure/tooling`。
-- `application` 只通过 `domain::ports::{ModelPort, ToolExecutorPort, MemoryPort}` 调用能力。
-- 具体 adapter 注入必须在 `runtime` 完成。
-- `README.md` 是架构/运行/测试单一文档入口，不新增根级 `docs/` 主文档。
-
-### 2.5 架构与交付约束（必须）
-
-- Backend 根目录只允许五层 + `lib.rs`：
-  `application/ domain/ infrastructure/ interface/ runtime/ lib.rs`
-- 禁止新增 `backend/src` 根级业务目录。
-- 新功能必须覆盖多端一致性：
-  - Backend API/行为完成
-  - Frontend React Shell 完成
-  - Tauri invoke/桥接完成
-  - 对应测试（至少 e2e 主路径）完成
-- 所有任务完成前必须通过 `make test-all`。
-
-### 2.6 Runtime / Config 规则
-
-- 默认配置路径：`~/.chaos-bot/config.json`
-- 兼容回退：若无 `config.json` 且存在 `~/.chaos-bot/agent.json`，读取 `agent.json`
-- 启动自动物化默认配置
-- Secret 合并顺序：先环境变量，再配置文件覆盖
-- 每次写配置都旋转：`config.json.bak1`、`config.json.bak2`
-
----
-
-## Part 3: 使用说明（怎么用、有哪些功能）
-
-### 3.1 快速开始（Web 模式）
-
-**第一步：配置 API Key**
-
-API Key 通过环境变量注入，不写入配置文件：
+Show help:
 
 ```bash
-export OPENAI_API_KEY=sk-...       # OpenAI
-# 或
-export ANTHROPIC_API_KEY=sk-ant-... # Anthropic / Claude
-# 或
-export GEMINI_API_KEY=...          # Google Gemini
+chaos-bot --help
+chaos-bot chat --help
+chaos-bot sessions --help
 ```
 
-**第二步：确认模型配置**
+One-shot chat:
 
-启动时自动物化 `~/.chaos-bot/config.json`，可按需修改：
+```bash
+chaos-bot chat "Summarize the current repository"
+```
+
+Continue an existing session:
+
+```bash
+chaos-bot sessions list
+chaos-bot chat <SESSION_ID> "Follow up on the last answer"
+```
+
+Read chat input from stdin:
+
+```bash
+printf 'Explain the failing test' | chaos-bot chat --stdin
+printf 'Continue from stdin' | chaos-bot chat --session <SESSION_ID> --stdin
+```
+
+Streaming output:
+
+```bash
+chaos-bot --output jsonl chat --stream "Stream this reply"
+```
+
+Inspect or delete sessions:
+
+```bash
+chaos-bot sessions list
+chaos-bot sessions get <SESSION_ID>
+chaos-bot sessions delete <SESSION_ID>
+```
+
+Config, skills, and upgrade:
+
+```bash
+chaos-bot config get
+chaos-bot config apply --raw '{"llm":{"provider":"mock","model":"mock-model"}}'
+chaos-bot skills list
+chaos-bot upgrade status
+```
+
+## Global Flags
+
+- `--config <PATH>`: load a specific config file
+- `--workspace <PATH>`: override the workspace root for the current command
+- `--output text|json|jsonl`: choose output contract
+- `--non-interactive`: fail instead of prompting when required input is missing
+
+## Config Shape
+
+Default config file: `~/.chaos-bot/config.json`
 
 ```json
 {
+  "workspace": ".chaos-bot",
   "llm": {
     "provider": "openai",
-    "model": "gpt-5.2"
-  }
+    "model": "gpt-4o-mini",
+    "temperature": 0.2,
+    "max_tokens": 1024,
+    "max_iterations": 6,
+    "token_budget": 12000
+  },
+  "search": {},
+  "logging": {
+    "level": "info",
+    "retention_days": 7,
+    "directory": "logs"
+  },
+  "secrets": {}
 }
 ```
 
-支持的 provider：`openai` / `anthropic` / `gemini`。
+## Release Verification
 
-**第三步：启动服务**
-
-```bash
-# 终端 1 — 后端（API 默认 :3000）
-make run
-
-# 终端 2 — 前端 dev server（UI 默认 :1420，/api/* 代理到后端）
-VITE_BACKEND_PROXY_TARGET=http://127.0.0.1:3000 make frontend-dev
-```
-
-**第四步：打开浏览器**
-
-访问 `http://localhost:1420`，应用自动将 API 请求代理到后端，无需手动填写 URL。
-
-### 3.2 主要功能面板
-
-- Sessions
-  - `Refresh`：刷新健康状态和会话列表
-  - `New`：创建新会话
-- Conversation
-  - 输入消息后 `Send`，实时流式显示 assistant 回复
-- Stream Events
-  - 查看 SSE 事件与 tool call 轨迹，便于排障
-- Config（新增）
-  - `Reload Config`：获取运行态/磁盘配置
-  - `Apply Config`：应用编辑后的 raw JSON 配置
-  - `Reset Config`：将磁盘配置重置到运行快照
-  - `Restart Runtime`：请求进程重启（可被运行模式禁用）
-
-### 3.3 API 入口（常用）
-
-- `GET /api/health`
-- `POST /api/chat` (SSE)
-- `GET/POST /api/sessions`
-- `GET/DELETE /api/sessions/:id`
-- `GET /api/config`
-- `POST /api/config/apply`
-- `POST /api/config/reset`
-- `POST /api/config/restart`
-- `GET /api/channels/status`
-- `POST /api/channels/telegram/webhook`
-- `GET /api/skills`
-- `GET /api/skills/:id`
-
-### 3.4 日志与排障
+Release and installer checks are CLI-only:
 
 ```bash
-# 查看当日日志
-tail -f ~/.chaos-bot/logs/$(date +%F).log
-
-# 清理运行时产物和 .tmp
-make clean-runtime
+make release-check
+make package-verify
+make install-verify
+make upgrade-verify
 ```
-
-### 3.5 相关文件
-
-- Runtime contract: `frontend-react/RUNTIME_CONTRACT.md`
-- PM runtime status: `AGENTS.md`
-- Tauri config: `src-tauri/tauri.conf.json`

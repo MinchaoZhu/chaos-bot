@@ -5,14 +5,8 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 OUTPUT_DIR="${1:-${ROOT_DIR}/.tmp/release}"
 TMP_DIR="$(mktemp -d)"
 PACKAGE_OUTPUTS="${TMP_DIR}/package-outputs.txt"
-BACKEND_LOG="${TMP_DIR}/backend.log"
-PORT=3311
 
 cleanup() {
-  if [[ -n "${SERVER_PID:-}" ]]; then
-    kill "${SERVER_PID}" >/dev/null 2>&1 || true
-    wait "${SERVER_PID}" >/dev/null 2>&1 || true
-  fi
   rm -rf "${TMP_DIR}"
 }
 trap cleanup EXIT
@@ -44,9 +38,8 @@ tar -C "${UNPACK_DIR}" -xzf "${bundle_path}"
 
 cat > "${HOME_DIR}/.chaos-bot/config.json" <<EOF
 {
-  "server": {
-    "host": "127.0.0.1",
-    "port": ${PORT}
+  "logging": {
+    "level": "error"
   },
   "llm": {
     "provider": "mock"
@@ -54,37 +47,75 @@ cat > "${HOME_DIR}/.chaos-bot/config.json" <<EOF
 }
 EOF
 
-HOME="${HOME_DIR}" CHAOS_BOT_DISABLE_SELF_RESTART=1 \
-  "${INSTALL_PREFIX}/bin/chaos-bot" > "${BACKEND_LOG}" 2>&1 &
-SERVER_PID=$!
+test -x "${INSTALL_PREFIX}/bin/chaos-bot"
+test -x "${INSTALL_PREFIX}/share/chaos-bot/releases/${release_version}/bin/chaos-bot"
+test ! -e "${INSTALL_PREFIX}/share/chaos-bot/releases/${release_version}/frontend"
 
-for _ in $(seq 1 40); do
-  if curl -fsS "http://127.0.0.1:${PORT}/api/health" >/dev/null; then
-    break
-  fi
-  sleep 1
-done
+python3 - "${INSTALL_PREFIX}/share/chaos-bot/releases/${release_version}/release-manifest.json" <<'PY'
+import json
+import sys
 
-curl -fsS "http://127.0.0.1:${PORT}/api/health" >/dev/null
-html="$(curl -fsS "http://127.0.0.1:${PORT}/")"
-case "${html}" in
-  *chaos-bot* ) ;;
+with open(sys.argv[1], "r", encoding="utf-8") as fh:
+    manifest = json.load(fh)
+
+assert manifest["entrypoint_binary"] == "bin/chaos-bot"
+assert manifest["install_layout"]["launchers"] == ["bin/chaos-bot"]
+assert "frontend_dist" not in manifest
+PY
+
+help_output="$(HOME="${HOME_DIR}" "${INSTALL_PREFIX}/bin/chaos-bot" --help)"
+case "${help_output}" in
+  *"CLI-first runtime for chaos-bot"* ) ;;
   * )
-    echo "packaged frontend root did not return the app shell" >&2
+    echo "packaged launcher help output is missing CLI description" >&2
     exit 1
     ;;
 esac
 
-asset_file="$(find "${INSTALL_PREFIX}/share/chaos-bot/releases/${release_version}/frontend/assets" -type f | head -n 1)"
-if [[ -z "${asset_file}" ]]; then
-  echo "packaged frontend assets were not installed" >&2
+chat_json="$(HOME="${HOME_DIR}" "${INSTALL_PREFIX}/bin/chaos-bot" --output json chat "packaged runtime hello")"
+session_id="$(python3 -c 'import json,sys; print(json.load(sys.stdin)["session_id"])' <<< "${chat_json}")"
+if [[ -z "${session_id}" ]]; then
+  echo "packaged chat did not return a session id" >&2
   exit 1
 fi
 
-asset_name="$(basename "${asset_file}")"
-asset_headers="$(curl -fsSI "http://127.0.0.1:${PORT}/assets/${asset_name}" | tr -d '\r' || true)"
-if [[ "${asset_headers}" != *"200 OK"* ]]; then
-  echo "packaged frontend asset did not respond successfully" >&2
+sessions_json="$(HOME="${HOME_DIR}" "${INSTALL_PREFIX}/bin/chaos-bot" --output json sessions list)"
+python3 - "${session_id}" "${sessions_json}" <<'PY'
+import json
+import sys
+
+session_id = sys.argv[1]
+items = json.loads(sys.argv[2])
+assert any(item["id"] == session_id for item in items)
+PY
+
+stream_output="$(HOME="${HOME_DIR}" "${INSTALL_PREFIX}/bin/chaos-bot" --output jsonl chat --stream "packaged runtime stream")"
+case "${stream_output}" in
+  *'"event":"session"'*'"event":"done"'* | *'"event":"done"'*'"event":"session"'* ) ;;
+  * )
+    echo "packaged chat stream did not emit session/done events" >&2
+    exit 1
+    ;;
+esac
+
+continued_json="$(
+  HOME="${HOME_DIR}" "${INSTALL_PREFIX}/bin/chaos-bot" --output json chat "${session_id}" "second turn"
+)"
+python3 - "${session_id}" "${continued_json}" <<'PY'
+import json
+import sys
+
+session_id = sys.argv[1]
+result = json.loads(sys.argv[2])
+assert result["session_id"] == session_id
+PY
+
+HOME="${HOME_DIR}" "${INSTALL_PREFIX}/bin/chaos-bot" --output json \
+  config apply --raw '{"llm":{"provider":"mock","model":"packaged-model"},"logging":{"level":"error"}}' >/dev/null
+config_json="$(HOME="${HOME_DIR}" "${INSTALL_PREFIX}/bin/chaos-bot" --output json config get)"
+config_model="$(python3 -c 'import json,sys; print(json.load(sys.stdin)["running"]["llm"]["model"])' <<< "${config_json}")"
+if [[ "${config_model}" != "packaged-model" ]]; then
+  echo "packaged config mutation did not persist expected model" >&2
   exit 1
 fi
 

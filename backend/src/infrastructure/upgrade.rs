@@ -233,10 +233,7 @@ impl UpgradePort for GitHubReleaseUpdater {
             action: "relaunch",
             launcher_path: Some(launcher_path.display().to_string()),
             target_version: Some(context.current_version.clone()),
-            message: format!(
-                "restart scheduled via {}",
-                launcher_path.display()
-            ),
+            message: format!("restart scheduled via {}", launcher_path.display()),
         })
     }
 }
@@ -591,9 +588,7 @@ mod tests {
 
     fn build_bundle(version: &str) -> Vec<u8> {
         let temp = tempdir().expect("tempdir");
-        let bundle_root = temp
-            .path()
-            .join(format!("{version}-linux-x86_64"));
+        let bundle_root = temp.path().join(format!("{version}-linux-x86_64"));
         fs::create_dir_all(bundle_root.join("bin")).expect("create bin");
 
         fs::write(

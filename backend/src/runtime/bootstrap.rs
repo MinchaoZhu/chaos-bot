@@ -33,10 +33,11 @@ pub async fn bootstrap_runtime_dirs(config: &AppConfig) -> Result<()> {
         );
     }
 
-    // data/sessions dir
-    let sessions_dir = config.working_dir.join("data/sessions");
-    tokio::fs::create_dir_all(&sessions_dir).await?;
-    tracing::debug!(sessions_dir = %sessions_dir.display(), "ensured sessions directory");
+    tokio::fs::create_dir_all(&config.sessions_dir).await?;
+    tracing::debug!(
+        sessions_dir = %config.sessions_dir.display(),
+        "ensured sessions directory"
+    );
 
     Ok(())
 }

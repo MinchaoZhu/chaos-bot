@@ -1,22 +1,19 @@
 # Project Context
 
-- Project: config
+- Project: cli
 - Main Repository: /home/debian/projects/chaos-bot
-- Branch: feat/config
+- Worktree: /home/debian/projects/chaos-bot/.projects/cli
 - Worktree Mode: enabled
-- Worktree Path: /home/debian/projects/chaos-bot/.projects/config
-- Updated At: 2026-03-08T20:13:24+08:00
+- Base Branch: master
+- Branch: feat/cli-first
+- Updated At: 2026-03-13T01:22:15+08:00
 
 ## Requirements
-
-- This project is dedicated to config-related changes in the chaos-bot repository.
-- Use this worktree to plan and execute configuration updates without mixing them with unrelated feature work.
-- Keep PM runtime files current so follow-up `pm new-task`, `pm update-task`, and `pm run-task` commands can continue from local context.
-- The current completed frontend task restructured navigation, config sub-tabs, and the About/version surface for config-related UX.
+- Refactor the project into a CLI-first product so code agents can develop and test features without GUI interference.
+- Remove HTTP server, Telegram/channel integration, and other long-running runtime modes from the core product.
+- Persist chat sessions on disk so CLI invocations can continue conversations safely across separate processes.
 
 ## Technical Constraints
-
-- Repository: git worktree based workflow rooted at `/home/debian/projects/chaos-bot`.
-- Branch target: `feat/config`.
-- Planning commands only update PM metadata and task files; implementation belongs to later `pm run-task` execution.
-- `AGENTS.md` is the shared runtime source of truth and `CLAUDE.md` must remain a symlink to it.
+- Keep backend crates and agent/domain logic intact while simplifying execution to a single-command CLI runtime.
+- Prefer deterministic CLI commands and scriptable verification over interactive GUI flows.
+- Future channel or network adapters, if needed, should live outside the core CLI as separate binaries or plugins.

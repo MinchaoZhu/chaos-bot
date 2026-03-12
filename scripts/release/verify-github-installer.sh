@@ -36,7 +36,8 @@ fi
 
 ASSET_ROOT="${TMP_DIR}/release-server"
 INSTALL_PREFIX="${TMP_DIR}/install-root"
-mkdir -p "${ASSET_ROOT}/assets" "${ASSET_ROOT}/repos/test/chaos-bot/releases" "${INSTALL_PREFIX}"
+HOME_DIR="${TMP_DIR}/home"
+mkdir -p "${ASSET_ROOT}/assets" "${ASSET_ROOT}/repos/test/chaos-bot/releases" "${INSTALL_PREFIX}" "${HOME_DIR}/.chaos-bot"
 
 cp "${bundle_path}" "${ASSET_ROOT}/assets/${bundle_root}.tar.gz"
 
@@ -67,7 +68,20 @@ curl -fsS "http://127.0.0.1:${ASSET_PORT}/repos/test/chaos-bot/releases/latest" 
 CHAOS_BOT_INSTALL_LATEST_RELEASE_URL="http://127.0.0.1:${ASSET_PORT}/repos/test/chaos-bot/releases/latest" \
   "${ROOT_DIR}/scripts/install-from-github.sh" --prefix "${INSTALL_PREFIX}"
 
+cat > "${HOME_DIR}/.chaos-bot/config.json" <<EOF
+{
+  "logging": {
+    "level": "error"
+  },
+  "llm": {
+    "provider": "mock"
+  }
+}
+EOF
+
 test -x "${INSTALL_PREFIX}/bin/chaos-bot"
 test -d "${INSTALL_PREFIX}/share/chaos-bot/releases/${release_version}"
+HOME="${HOME_DIR}" "${INSTALL_PREFIX}/bin/chaos-bot" --help >/dev/null
+HOME="${HOME_DIR}" "${INSTALL_PREFIX}/bin/chaos-bot" chat "installer smoke" >/dev/null
 
 echo "github installer verified for ${release_version}"

@@ -1,4 +1,3 @@
-pub mod channels;
 pub mod config;
 pub mod logging;
 pub mod memory;

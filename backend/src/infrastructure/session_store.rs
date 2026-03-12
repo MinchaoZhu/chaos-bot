@@ -1,90 +1,119 @@
 use crate::domain::types::SessionState;
-use std::collections::HashMap;
+use anyhow::{bail, Context, Result};
+use std::ffi::OsStr;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
-use tokio::sync::RwLock;
 use uuid::Uuid;
 
-#[derive(Default)]
-struct SessionStoreState {
-    sessions: HashMap<String, SessionState>,
-    channel_bindings: HashMap<String, String>,
-}
-
-#[derive(Clone, Default)]
+#[derive(Clone)]
 pub struct SessionStore {
-    inner: Arc<RwLock<SessionStoreState>>,
+    root: Arc<PathBuf>,
 }
 
 impl SessionStore {
-    pub fn new() -> Self {
-        Self::default()
+    pub fn new(root: PathBuf) -> Self {
+        Self {
+            root: Arc::new(root),
+        }
     }
 
-    pub async fn create(&self) -> SessionState {
+    pub async fn ensure_layout(&self) -> Result<()> {
+        tokio::fs::create_dir_all(&*self.root)
+            .await
+            .with_context(|| format!("failed to create sessions dir: {}", self.root.display()))
+    }
+
+    pub async fn create(&self) -> Result<SessionState> {
         let session = SessionState::new(Uuid::new_v4().to_string());
-        self.inner
-            .write()
-            .await
-            .sessions
-            .insert(session.id.clone(), session.clone());
+        self.upsert(session.clone()).await?;
         tracing::debug!(session_id = %session.id, "created session");
-        session
+        Ok(session)
     }
 
-    pub async fn get(&self, id: &str) -> Option<SessionState> {
-        let found = self.inner.read().await.sessions.get(id).cloned();
-        tracing::debug!(session_id = %id, found = found.is_some(), "fetched session");
-        found
+    pub async fn get(&self, id: &str) -> Result<Option<SessionState>> {
+        let Some(path) = self.session_path(id)? else {
+            return Ok(None);
+        };
+        if !tokio::fs::try_exists(&path).await.unwrap_or(false) {
+            tracing::debug!(session_id = %id, found = false, "fetched session");
+            return Ok(None);
+        }
+
+        let raw = tokio::fs::read_to_string(&path)
+            .await
+            .with_context(|| format!("failed to read session file: {}", path.display()))?;
+        let session = serde_json::from_str::<SessionState>(&raw)
+            .with_context(|| format!("invalid session json: {}", path.display()))?;
+        tracing::debug!(session_id = %id, found = true, "fetched session");
+        Ok(Some(session))
     }
 
-    pub async fn upsert(&self, session: SessionState) {
+    pub async fn upsert(&self, session: SessionState) -> Result<()> {
         let session_id = session.id.clone();
-        self.inner
-            .write()
+        let path = self
+            .session_path(&session_id)?
+            .context("invalid session id")?;
+        self.ensure_layout().await?;
+        let raw = format!("{}\n", serde_json::to_string_pretty(&session)?);
+        tokio::fs::write(&path, raw)
             .await
-            .sessions
-            .insert(session_id.clone(), session);
+            .with_context(|| format!("failed to write session file: {}", path.display()))?;
         tracing::debug!(session_id = %session_id, "upserted session");
+        Ok(())
     }
 
-    pub async fn list(&self) -> Vec<SessionState> {
-        let mut sessions = self
-            .inner
-            .read()
+    pub async fn list(&self) -> Result<Vec<SessionState>> {
+        self.ensure_layout().await?;
+        let mut dir = tokio::fs::read_dir(&*self.root)
             .await
-            .sessions
-            .values()
-            .cloned()
-            .collect::<Vec<_>>();
+            .with_context(|| format!("failed to read sessions dir: {}", self.root.display()))?;
+        let mut sessions = Vec::new();
+
+        while let Some(entry) = dir.next_entry().await? {
+            let path = entry.path();
+            if path.extension() != Some(OsStr::new("json")) {
+                continue;
+            }
+            let raw = tokio::fs::read_to_string(&path)
+                .await
+                .with_context(|| format!("failed to read session file: {}", path.display()))?;
+            let session = serde_json::from_str::<SessionState>(&raw)
+                .with_context(|| format!("invalid session json: {}", path.display()))?;
+            sessions.push(session);
+        }
+
         sessions.sort_by(|a, b| b.updated_at.cmp(&a.updated_at));
         tracing::debug!(count = sessions.len(), "listed sessions");
-        sessions
+        Ok(sessions)
     }
 
-    pub async fn delete(&self, id: &str) -> bool {
-        let mut state = self.inner.write().await;
-        let deleted = state.sessions.remove(id).is_some();
-        if deleted {
-            state
-                .channel_bindings
-                .retain(|_, session_id| session_id != id);
-        }
+    pub async fn delete(&self, id: &str) -> Result<bool> {
+        let Some(path) = self.session_path(id)? else {
+            return Ok(false);
+        };
+        let deleted = if tokio::fs::try_exists(&path).await.unwrap_or(false) {
+            tokio::fs::remove_file(&path)
+                .await
+                .with_context(|| format!("failed to delete session file: {}", path.display()))?;
+            true
+        } else {
+            false
+        };
         tracing::debug!(session_id = %id, deleted, "deleted session");
-        deleted
+        Ok(deleted)
     }
 
-    pub async fn bind_channel_session(&self, channel_key: &str, session_id: &str) {
-        self.inner
-            .write()
-            .await
-            .channel_bindings
-            .insert(channel_key.to_string(), session_id.to_string());
-        tracing::debug!(channel_key = %channel_key, session_id = %session_id, "bound channel key to session");
+    pub fn root(&self) -> &Path {
+        self.root.as_ref()
     }
 
-    pub async fn session_for_channel_key(&self, channel_key: &str) -> Option<SessionState> {
-        let state = self.inner.read().await;
-        let session_id = state.channel_bindings.get(channel_key)?;
-        state.sessions.get(session_id).cloned()
+    fn session_path(&self, id: &str) -> Result<Option<PathBuf>> {
+        if id.is_empty() {
+            bail!("session id is empty");
+        }
+        if id == "." || id == ".." || id.contains('/') || id.contains('\\') {
+            return Ok(None);
+        }
+        Ok(Some(self.root.join(format!("{id}.json"))))
     }
 }

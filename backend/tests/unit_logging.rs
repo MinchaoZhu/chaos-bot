@@ -1,8 +1,8 @@
 use chaos_bot_backend::domain::audit::{redact_json, redact_raw_json};
 use chaos_bot_backend::domain::{AppError, ErrorCode};
 use chaos_bot_backend::infrastructure::config::{
-    AgentChannelsConfig, AgentFileConfig, AgentLlmConfig, AgentLoggingConfig, AgentSearchConfig,
-    AgentSecretsConfig, AgentServerConfig, AppConfig, EnvSecrets,
+    AgentFileConfig, AgentLlmConfig, AgentLoggingConfig, AgentSearchConfig, AgentSecretsConfig,
+    AppConfig, EnvSecrets,
 };
 use chaos_bot_backend::infrastructure::logging::{cleanup_old_logs_at, init_logging};
 use chrono::NaiveDate;
@@ -45,10 +45,8 @@ fn init_logging_writes_to_workspace_log_file() {
                 retention_days: Some(7),
                 directory: Some(std::path::PathBuf::from("./logs")),
             },
-            server: AgentServerConfig::default(),
             llm: AgentLlmConfig::default(),
             search: AgentSearchConfig::default(),
-            channels: AgentChannelsConfig::default(),
             secrets: AgentSecretsConfig::default(),
         },
         EnvSecrets::default(),
@@ -96,4 +94,5 @@ fn app_error_exposes_unified_error_code() {
     let error = AppError::service_unavailable("runtime unavailable");
     assert_eq!(error.code(), ErrorCode::ServiceUnavailable);
     assert_eq!(error.code_str(), "service_unavailable");
+    assert_eq!(error.status_code(), 503);
 }
