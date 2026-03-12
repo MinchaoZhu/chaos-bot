@@ -1,3 +1,4 @@
+#[path = "common/mod.rs"]
 mod support;
 
 use chaos_bot_backend::application::agent::AgentLoop;

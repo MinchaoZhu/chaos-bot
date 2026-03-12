@@ -16,6 +16,8 @@ pub enum RestartMode {
     ExitProcess,
 }
 
+impl RestartMode {}
+
 #[async_trait]
 pub trait AgentFactory: Send + Sync {
     async fn build_agent(&self, config: &AppConfig) -> Result<Arc<AgentLoop>>;

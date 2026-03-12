@@ -6,8 +6,6 @@ use std::collections::{HashMap, VecDeque};
 
 fn test_app_config(provider: &str, model: &str) -> AppConfig {
     let mut config = AppConfig::default();
-    config.host = "0.0.0.0".to_string();
-    config.port = 3000;
     config.provider = provider.to_string();
     config.model = model.to_string();
     config.temperature = 0.0;
@@ -23,6 +21,7 @@ fn test_app_config(provider: &str, model: &str) -> AppConfig {
     config.personality_dir = std::path::PathBuf::from(".");
     config.memory_dir = std::path::PathBuf::from(".");
     config.memory_file = std::path::PathBuf::from(".");
+    config.sessions_dir = std::path::PathBuf::from(".");
     config.skills_dir = std::path::PathBuf::from(".");
     config
 }

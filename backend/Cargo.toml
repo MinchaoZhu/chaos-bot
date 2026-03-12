@@ -1,17 +1,18 @@
 [package]
 name = "chaos-bot-backend"
-version = "0.1.6"
+version = "0.1.7"
 edition = "2021"
+default-run = "chaos-bot"
 
 [[bin]]
-name = "chaos-bot-backend"
-path = "src/runtime/bin/chaos_bot_backend.rs"
+name = "chaos-bot"
+path = "src/runtime/bin/chaos_bot.rs"
 
 [dependencies]
 anyhow = "1"
 async-trait = "0.1"
-axum = { version = "0.7", features = ["macros"] }
 chrono = { version = "0.4", features = ["serde"] }
+clap = { version = "4.5", features = ["derive"] }
 dotenvy = "0.15"
 futures = "0.3"
 reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls", "stream"] }
@@ -25,7 +26,6 @@ shlex = "1"
 tar = "0.4"
 tempfile = "3"
 tokio = { version = "1", features = ["full"] }
-tokio-stream = "0.1"
 tracing = "=0.1.44"
 tracing-appender = "0.2"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt"] }
@@ -33,7 +33,7 @@ uuid = { version = "1", features = ["v4", "serde"] }
 walkdir = "2"
 
 [dev-dependencies]
+axum = { version = "0.7", features = ["macros"] }
 assert-json-diff = "2"
 pretty_assertions = "1"
 serial_test = "3"
-tower = "0.5"

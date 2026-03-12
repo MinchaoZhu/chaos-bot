@@ -51,9 +51,6 @@ fi
 
 declare -A actual_versions=(
   ["backend/Cargo.toml"]="$(extract_toml_version "${ROOT_DIR}/backend/Cargo.toml")"
-  ["frontend-react/package.json"]="$(extract_package_json_version "${ROOT_DIR}/frontend-react/package.json")"
-  ["src-tauri/Cargo.toml"]="$(extract_toml_version "${ROOT_DIR}/src-tauri/Cargo.toml")"
-  ["src-tauri/tauri.conf.json"]="$(extract_package_json_version "${ROOT_DIR}/src-tauri/tauri.conf.json")"
 )
 
 failed=0

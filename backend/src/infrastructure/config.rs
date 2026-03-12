@@ -13,8 +13,6 @@ const LEGACY_CONFIG_FILE_NAME: &str = "agent.json";
 
 #[derive(Clone, Debug)]
 pub struct AppConfig {
-    pub host: String,
-    pub port: u16,
     pub provider: String,
     pub model: String,
     pub search_provider: Option<String>,
@@ -24,16 +22,10 @@ pub struct AppConfig {
     pub perplexity_api_key: Option<String>,
     pub tavily_api_key: Option<String>,
     pub brave_search_api_key: Option<String>,
-    pub telegram_bot_token: Option<String>,
     pub temperature: f32,
     pub max_tokens: u32,
     pub max_iterations: usize,
     pub token_budget: u32,
-    pub telegram_enabled: bool,
-    pub telegram_webhook_secret: Option<String>,
-    pub telegram_webhook_base_url: Option<String>,
-    pub telegram_polling: bool,
-    pub telegram_api_base_url: String,
     pub workspace: PathBuf,
     pub config_path: PathBuf,
     pub log_level: String,
@@ -43,8 +35,8 @@ pub struct AppConfig {
     pub personality_dir: PathBuf,
     pub memory_dir: PathBuf,
     pub memory_file: PathBuf,
+    pub sessions_dir: PathBuf,
     pub skills_dir: PathBuf,
-    pub frontend_dist: Option<PathBuf>,
 }
 
 #[derive(Clone, Debug)]
@@ -60,8 +52,6 @@ impl Default for AppConfig {
         let workspace_base = workspace_base_for(&cwd);
         let workspace = default_workspace_path(&workspace_base);
         Self {
-            host: "0.0.0.0".to_string(),
-            port: 3000,
             provider: "openai".to_string(),
             model: "gpt-4o-mini".to_string(),
             search_provider: None,
@@ -71,16 +61,10 @@ impl Default for AppConfig {
             perplexity_api_key: None,
             tavily_api_key: None,
             brave_search_api_key: None,
-            telegram_bot_token: None,
             temperature: 0.2,
             max_tokens: 1024,
             max_iterations: 6,
             token_budget: 12_000,
-            telegram_enabled: false,
-            telegram_webhook_secret: None,
-            telegram_webhook_base_url: None,
-            telegram_polling: false,
-            telegram_api_base_url: "https://api.telegram.org".to_string(),
             config_path: default_config_path_for_workspace(&workspace),
             log_level: "info".to_string(),
             log_retention_days: 7,
@@ -89,8 +73,8 @@ impl Default for AppConfig {
             personality_dir: workspace.join("personality"),
             memory_dir: workspace.join("memory"),
             memory_file: workspace.join("MEMORY.md"),
+            sessions_dir: workspace.join("sessions"),
             skills_dir: workspace.join("skills"),
-            frontend_dist: frontend_dist_from_env(&cwd),
             workspace,
         }
     }
@@ -130,7 +114,6 @@ impl AppConfig {
         let workspace_base = workspace_base_for(&cwd);
         let mut app = Self::from_inputs(file_config.clone(), env_secrets, workspace_base);
         app.config_path = config_path;
-        app.frontend_dist = frontend_dist_from_env(&cwd);
         Ok((app, file_config, raw))
     }
 
@@ -145,14 +128,6 @@ impl AppConfig {
         config.openai_api_key = env_secrets.openai_api_key;
         config.anthropic_api_key = env_secrets.anthropic_api_key;
         config.gemini_api_key = env_secrets.gemini_api_key;
-        config.telegram_bot_token = env_secrets.telegram_bot_token;
-
-        if let Some(host) = file_config.server.host {
-            config.host = host;
-        }
-        if let Some(port) = file_config.server.port {
-            config.port = port;
-        }
 
         if let Some(provider) = file_config.llm.provider {
             config.provider = provider;
@@ -179,22 +154,6 @@ impl AppConfig {
         }
         if let Some(token_budget) = file_config.llm.token_budget {
             config.token_budget = token_budget;
-        }
-
-        if let Some(enabled) = file_config.channels.telegram.enabled {
-            config.telegram_enabled = enabled;
-        }
-        if let Some(webhook_secret) = file_config.channels.telegram.webhook_secret {
-            config.telegram_webhook_secret = Some(webhook_secret);
-        }
-        if let Some(webhook_base_url) = file_config.channels.telegram.webhook_base_url {
-            config.telegram_webhook_base_url = Some(webhook_base_url);
-        }
-        if let Some(polling) = file_config.channels.telegram.polling {
-            config.telegram_polling = polling;
-        }
-        if let Some(api_base_url) = file_config.channels.telegram.api_base_url {
-            config.telegram_api_base_url = api_base_url;
         }
 
         if let Some(workspace) = file_config.workspace {
@@ -230,18 +189,12 @@ impl AppConfig {
         if let Some(brave_search_api_key) = file_config.secrets.brave_search_api_key {
             config.brave_search_api_key = Some(brave_search_api_key);
         }
-        if let Some(telegram_bot_token) = file_config.secrets.telegram_bot_token {
-            config.telegram_bot_token = Some(telegram_bot_token);
-        }
-
         config
     }
 
     fn defaults_for_workspace_base(workspace_base: PathBuf) -> Self {
         let workspace = default_workspace_path(&workspace_base);
         Self {
-            host: "0.0.0.0".to_string(),
-            port: 3000,
             provider: "openai".to_string(),
             model: "gpt-4o-mini".to_string(),
             search_provider: None,
@@ -251,16 +204,10 @@ impl AppConfig {
             perplexity_api_key: None,
             tavily_api_key: None,
             brave_search_api_key: None,
-            telegram_bot_token: None,
             temperature: 0.2,
             max_tokens: 1024,
             max_iterations: 6,
             token_budget: 12_000,
-            telegram_enabled: false,
-            telegram_webhook_secret: None,
-            telegram_webhook_base_url: None,
-            telegram_polling: false,
-            telegram_api_base_url: "https://api.telegram.org".to_string(),
             config_path: default_config_path_for_workspace(&workspace),
             log_level: "info".to_string(),
             log_retention_days: 7,
@@ -269,8 +216,8 @@ impl AppConfig {
             personality_dir: workspace.join("personality"),
             memory_dir: workspace.join("memory"),
             memory_file: workspace.join("MEMORY.md"),
+            sessions_dir: workspace.join("sessions"),
             skills_dir: workspace.join("skills"),
-            frontend_dist: None,
             workspace,
         }
     }
@@ -281,7 +228,13 @@ impl AppConfig {
         self.personality_dir = self.workspace.join("personality");
         self.memory_dir = self.workspace.join("memory");
         self.memory_file = self.workspace.join("MEMORY.md");
+        self.sessions_dir = self.workspace.join("sessions");
         self.skills_dir = self.workspace.join("skills");
+    }
+
+    pub fn apply_workspace_override(&mut self, workspace: PathBuf, workspace_base: &Path) {
+        self.workspace = resolve_workspace_path(workspace_base, workspace);
+        self.derive_runtime_paths_from_workspace();
     }
 }
 
@@ -290,7 +243,6 @@ pub struct EnvSecrets {
     pub openai_api_key: Option<String>,
     pub anthropic_api_key: Option<String>,
     pub gemini_api_key: Option<String>,
-    pub telegram_bot_token: Option<String>,
 }
 
 impl EnvSecrets {
@@ -299,7 +251,6 @@ impl EnvSecrets {
             openai_api_key: env::var("OPENAI_API_KEY").ok(),
             anthropic_api_key: env::var("ANTHROPIC_API_KEY").ok(),
             gemini_api_key: env::var("GEMINI_API_KEY").ok(),
-            telegram_bot_token: env::var("TELEGRAM_BOT_TOKEN").ok(),
         }
     }
 }
@@ -309,18 +260,9 @@ impl EnvSecrets {
 pub struct AgentFileConfig {
     pub workspace: Option<PathBuf>,
     pub logging: AgentLoggingConfig,
-    pub server: AgentServerConfig,
     pub llm: AgentLlmConfig,
     pub search: AgentSearchConfig,
-    pub channels: AgentChannelsConfig,
     pub secrets: AgentSecretsConfig,
-}
-
-#[derive(Clone, Debug, Deserialize, Serialize, Default)]
-#[serde(default)]
-pub struct AgentServerConfig {
-    pub host: Option<String>,
-    pub port: Option<u16>,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize, Default)]
@@ -350,22 +292,6 @@ pub struct AgentSearchConfig {
 
 #[derive(Clone, Debug, Deserialize, Serialize, Default)]
 #[serde(default)]
-pub struct AgentChannelsConfig {
-    pub telegram: AgentTelegramConfig,
-}
-
-#[derive(Clone, Debug, Deserialize, Serialize, Default)]
-#[serde(default)]
-pub struct AgentTelegramConfig {
-    pub enabled: Option<bool>,
-    pub webhook_secret: Option<String>,
-    pub webhook_base_url: Option<String>,
-    pub polling: Option<bool>,
-    pub api_base_url: Option<String>,
-}
-
-#[derive(Clone, Debug, Deserialize, Serialize, Default)]
-#[serde(default)]
 pub struct AgentSecretsConfig {
     pub openai_api_key: Option<String>,
     pub anthropic_api_key: Option<String>,
@@ -373,7 +299,6 @@ pub struct AgentSecretsConfig {
     pub perplexity_api_key: Option<String>,
     pub tavily_api_key: Option<String>,
     pub brave_search_api_key: Option<String>,
-    pub telegram_bot_token: Option<String>,
 }
 
 impl AgentFileConfig {
@@ -460,18 +385,6 @@ fn resolve_config_path(cwd: &Path, path: &Path) -> PathBuf {
         path.to_path_buf()
     } else {
         cwd.join(path)
-    }
-}
-
-fn frontend_dist_from_env(cwd: &Path) -> Option<PathBuf> {
-    let value = env::var_os("CHAOS_BOT_FRONTEND_DIST")?;
-    let path = PathBuf::from(value);
-    if path.as_os_str().is_empty() {
-        None
-    } else if path.is_absolute() {
-        Some(path)
-    } else {
-        Some(cwd.join(path))
     }
 }
 

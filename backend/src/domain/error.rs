@@ -1,6 +1,3 @@
-use axum::http::StatusCode;
-use axum::response::{IntoResponse, Response};
-use axum::Json;
 use serde::Serialize;
 
 #[derive(Clone, Copy, Debug, Serialize, PartialEq, Eq)]
@@ -27,7 +24,7 @@ impl ErrorCode {
 pub struct AppError {
     code: ErrorCode,
     message: String,
-    status: StatusCode,
+    status_code: u16,
 }
 
 impl AppError {
@@ -35,7 +32,7 @@ impl AppError {
         Self {
             code: ErrorCode::InvalidRequest,
             message: message.into(),
-            status: StatusCode::BAD_REQUEST,
+            status_code: 400,
         }
     }
 
@@ -43,7 +40,7 @@ impl AppError {
         Self {
             code: ErrorCode::NotFound,
             message: message.into(),
-            status: StatusCode::NOT_FOUND,
+            status_code: 404,
         }
     }
 
@@ -51,7 +48,7 @@ impl AppError {
         Self {
             code: ErrorCode::ServiceUnavailable,
             message: message.into(),
-            status: StatusCode::SERVICE_UNAVAILABLE,
+            status_code: 503,
         }
     }
 
@@ -59,7 +56,7 @@ impl AppError {
         Self {
             code: ErrorCode::Internal,
             message: message.into(),
-            status: StatusCode::INTERNAL_SERVER_ERROR,
+            status_code: 500,
         }
     }
 
@@ -71,30 +68,11 @@ impl AppError {
         self.code.as_str()
     }
 
-    pub fn status(&self) -> StatusCode {
-        self.status
+    pub fn status_code(&self) -> u16 {
+        self.status_code
     }
 
     pub fn message(&self) -> &str {
         &self.message
-    }
-}
-
-#[derive(Serialize)]
-struct ErrorResponse {
-    code: &'static str,
-    message: String,
-}
-
-impl IntoResponse for AppError {
-    fn into_response(self) -> Response {
-        (
-            self.status,
-            Json(ErrorResponse {
-                code: self.code.as_str(),
-                message: self.message,
-            }),
-        )
-            .into_response()
     }
 }

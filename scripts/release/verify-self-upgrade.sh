@@ -5,17 +5,16 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 OUTPUT_DIR="${1:-${ROOT_DIR}/.tmp/release}"
 TMP_DIR="$(mktemp -d)"
 PACKAGE_OUTPUTS="${TMP_DIR}/package-outputs.txt"
-CURRENT_PORT=3312
 ASSET_PORT=3391
 
 cleanup() {
-  if [[ -n "${SERVER_PID:-}" ]]; then
-    kill "${SERVER_PID}" >/dev/null 2>&1 || true
-    wait "${SERVER_PID}" >/dev/null 2>&1 || true
-  fi
   if [[ -n "${HTTP_PID:-}" ]]; then
     kill "${HTTP_PID}" >/dev/null 2>&1 || true
     wait "${HTTP_PID}" >/dev/null 2>&1 || true
+  fi
+  if [[ -n "${RELAUNCH_PID:-}" ]]; then
+    kill "${RELAUNCH_PID}" >/dev/null 2>&1 || true
+    wait "${RELAUNCH_PID}" >/dev/null 2>&1 || true
   fi
   rm -rf "${TMP_DIR}"
 }
@@ -58,9 +57,8 @@ tar -C "${UNPACK_DIR}" -xzf "${bundle_path}"
 
 cat > "${HOME_DIR}/.chaos-bot/config.json" <<EOF
 {
-  "server": {
-    "host": "127.0.0.1",
-    "port": ${CURRENT_PORT}
+  "logging": {
+    "level": "error"
   },
   "llm": {
     "provider": "mock"
@@ -120,78 +118,69 @@ for _ in $(seq 1 20); do
 done
 curl -fsS "http://127.0.0.1:${ASSET_PORT}/repos/test/chaos-bot/releases/latest" >/dev/null
 
-HOME="${HOME_DIR}" CHAOS_BOT_DISABLE_SELF_RESTART=1 \
+status_json="$(
+  HOME="${HOME_DIR}" \
   CHAOS_BOT_UPGRADE_LATEST_RELEASE_URL="http://127.0.0.1:${ASSET_PORT}/repos/test/chaos-bot/releases/latest" \
-  "${INSTALL_PREFIX}/bin/chaos-bot" >/tmp/chaos-bot-upgrade-backend.log 2>&1 &
-SERVER_PID=$!
+    "${INSTALL_PREFIX}/bin/chaos-bot" --output json upgrade status
+)"
+python3 - "${next_release_version}" "${status_json}" <<'PY'
+import json
+import sys
 
-for _ in $(seq 1 40); do
-  if curl -fsS "http://127.0.0.1:${CURRENT_PORT}/api/health" >/dev/null; then
-    break
-  fi
-  sleep 1
-done
-curl -fsS "http://127.0.0.1:${CURRENT_PORT}/api/health" >/dev/null
+status = json.loads(sys.argv[2])
+expected = sys.argv[1]
+assert status["supported"] is True
+assert status["upgrade_available"] is True
+assert status["latest_version"] == expected
+PY
 
-status_json="$(curl -fsS "http://127.0.0.1:${CURRENT_PORT}/api/upgrade")"
-case "${status_json}" in
-  *"\"upgrade_available\":true"* ) ;;
-  * )
-    echo "upgrade status did not report an available release" >&2
-    exit 1
-    ;;
-esac
+apply_json="$(
+  HOME="${HOME_DIR}" \
+  CHAOS_BOT_UPGRADE_LATEST_RELEASE_URL="http://127.0.0.1:${ASSET_PORT}/repos/test/chaos-bot/releases/latest" \
+    "${INSTALL_PREFIX}/bin/chaos-bot" --output json upgrade apply
+)"
+python3 - "${next_release_version}" "${apply_json}" <<'PY'
+import json
+import sys
 
-apply_json="$(curl -fsS -H 'content-type: application/json' -d '{}' "http://127.0.0.1:${CURRENT_PORT}/api/upgrade/apply")"
-case "${apply_json}" in
-  *"\"action\":\"upgrade\""* ) ;;
-  * )
-    echo "upgrade apply did not return an upgrade action" >&2
-    exit 1
-    ;;
-esac
-case "${apply_json}" in
-  *"\"target_version\":\"${next_release_version}\""* ) ;;
-  * )
-    echo "upgrade apply did not target the staged release version" >&2
-    exit 1
-    ;;
-esac
+result = json.loads(sys.argv[2])
+expected = sys.argv[1]
+assert result["action"] == "upgrade"
+assert result["target_version"] == expected
+assert result["relaunch_required"] is True
+PY
 
 test -d "${INSTALL_PREFIX}/share/chaos-bot/releases/${next_release_version}"
 grep -q "${next_release_version}" "${INSTALL_PREFIX}/bin/chaos-bot"
 
-kill "${SERVER_PID}" >/dev/null 2>&1 || true
-wait "${SERVER_PID}" >/dev/null 2>&1 || true
-unset SERVER_PID
-
-HOME="${HOME_DIR}" CHAOS_BOT_DISABLE_SELF_RESTART=1 \
+relaunch_json="$(
+HOME="${HOME_DIR}" \
   CHAOS_BOT_UPGRADE_LATEST_RELEASE_URL="http://127.0.0.1:${ASSET_PORT}/repos/test/chaos-bot/releases/latest" \
-  "${INSTALL_PREFIX}/bin/chaos-bot" >/tmp/chaos-bot-upgrade-backend-relaunch.log 2>&1 &
-SERVER_PID=$!
+  "${INSTALL_PREFIX}/bin/chaos-bot" --output json upgrade relaunch
+)"
+python3 - "${next_release_version}" "${relaunch_json}" <<'PY'
+import json
+import sys
 
-for _ in $(seq 1 40); do
-  if curl -fsS "http://127.0.0.1:${CURRENT_PORT}/api/health" >/dev/null; then
-    break
-  fi
-  sleep 1
-done
-curl -fsS "http://127.0.0.1:${CURRENT_PORT}/api/health" >/dev/null
+result = json.loads(sys.argv[2])
+expected = sys.argv[1]
+assert result["action"] == "relaunch"
+assert result["target_version"] == expected
+PY
 
-relaunch_status_json="$(curl -fsS "http://127.0.0.1:${CURRENT_PORT}/api/upgrade")"
-case "${relaunch_status_json}" in
-  *"\"current_version\":\"${next_release_version}\""* ) ;;
-  * )
-    echo "relaunched backend did not report the upgraded current version" >&2
-    exit 1
-    ;;
-esac
-case "${relaunch_status_json}" in
-  *"\"upgrade_available\":false"* ) ;;
-  * )
-    echo "relaunched backend still reports an available upgrade" >&2
-    exit 1
-    ;;
-esac
+post_upgrade_status="$(
+  HOME="${HOME_DIR}" \
+  CHAOS_BOT_UPGRADE_LATEST_RELEASE_URL="http://127.0.0.1:${ASSET_PORT}/repos/test/chaos-bot/releases/latest" \
+    "${INSTALL_PREFIX}/bin/chaos-bot" --output json upgrade status
+)"
+python3 - "${next_release_version}" "${post_upgrade_status}" <<'PY'
+import json
+import sys
+
+status = json.loads(sys.argv[2])
+expected = sys.argv[1]
+assert status["current_version"] == expected
+assert status["upgrade_available"] is False
+PY
 
 echo "self-upgrade verified from ${release_version} to ${next_release_version}"

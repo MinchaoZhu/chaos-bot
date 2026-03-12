@@ -90,7 +90,7 @@ validate_commit_subject() {
 
 validate_version_sync_for_ref() {
   local ref_sha="$1"
-  local expected backend_version frontend_version tauri_cargo_version tauri_conf_version
+  local expected backend_version
 
   expected="$(git show "${ref_sha}:VERSION" 2>/dev/null | tr -d '[:space:]' || true)"
   if [[ -z "${expected}" ]]; then
@@ -101,24 +101,9 @@ validate_version_sync_for_ref() {
   validate_version_format_and_bounds "${expected}"
 
   backend_version="$(extract_toml_version_from_ref "${ref_sha}" "backend/Cargo.toml")"
-  frontend_version="$(extract_json_version_from_ref "${ref_sha}" "frontend-react/package.json")"
-  tauri_cargo_version="$(extract_toml_version_from_ref "${ref_sha}" "src-tauri/Cargo.toml")"
-  tauri_conf_version="$(extract_json_version_from_ref "${ref_sha}" "src-tauri/tauri.conf.json")"
 
   if [[ "${backend_version}" != "${expected}" ]]; then
     echo "pre-push: version mismatch at ${ref_sha}: backend/Cargo.toml='${backend_version}', expected '${expected}'" >&2
-    return 1
-  fi
-  if [[ "${frontend_version}" != "${expected}" ]]; then
-    echo "pre-push: version mismatch at ${ref_sha}: frontend-react/package.json='${frontend_version}', expected '${expected}'" >&2
-    return 1
-  fi
-  if [[ "${tauri_cargo_version}" != "${expected}" ]]; then
-    echo "pre-push: version mismatch at ${ref_sha}: src-tauri/Cargo.toml='${tauri_cargo_version}', expected '${expected}'" >&2
-    return 1
-  fi
-  if [[ "${tauri_conf_version}" != "${expected}" ]]; then
-    echo "pre-push: version mismatch at ${ref_sha}: src-tauri/tauri.conf.json='${tauri_conf_version}', expected '${expected}'" >&2
     return 1
   fi
 }

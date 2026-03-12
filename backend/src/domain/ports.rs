@@ -1,4 +1,3 @@
-use crate::domain::chat::{ChannelDelivery, ChannelHealth, OutboundChannelMessage};
 use crate::domain::skills::{SkillDetail, SkillMeta};
 use crate::domain::types::{Message, ToolCall, ToolResult, ToolSpec, Usage};
 use crate::domain::upgrade::{UpgradeApplyResult, UpgradeRestartResult, UpgradeStatus};
@@ -89,28 +88,6 @@ pub trait ToolExecutorPort: Send + Sync {
         args: Value,
         context: &ToolExecutionContext,
     ) -> Result<ToolResult>;
-}
-
-#[async_trait]
-pub trait ChannelConnectorPort: Send + Sync {
-    fn channel(&self) -> &'static str;
-    async fn start(&self) -> Result<()> {
-        Ok(())
-    }
-    async fn stop(&self) -> Result<()> {
-        Ok(())
-    }
-    async fn health(&self) -> Result<ChannelHealth>;
-    async fn send(&self, message: OutboundChannelMessage) -> Result<ChannelDelivery>;
-}
-
-#[async_trait]
-pub trait ChannelDispatcherPort: Send + Sync {
-    async fn dispatch(&self, message: OutboundChannelMessage) -> Result<ChannelDelivery>;
-    async fn start_all(&self) -> Result<()>;
-    async fn stop_all(&self) -> Result<()>;
-    async fn health_summary(&self) -> Result<Vec<ChannelHealth>>;
-    fn enabled_channels(&self) -> Vec<String>;
 }
 
 #[async_trait]
