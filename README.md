@@ -13,6 +13,20 @@
   - `~/.chaos-bot/memory/`
   - `~/.chaos-bot/skills/`
 
+## Install Latest Release
+
+Install the latest GitHub release on Linux x86_64:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/MinchaoZhu/chaos-bot/master/scripts/install-from-github.sh | bash
+```
+
+Install into a custom prefix:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/MinchaoZhu/chaos-bot/master/scripts/install-from-github.sh | bash -s -- --prefix /usr/local
+```
+
 ## Build And Run
 
 ```bash
